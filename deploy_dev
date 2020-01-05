@@ -1,0 +1,83 @@
+#!/bin/bash
+
+#check if a new volume should be created
+if [ -z $(docker volume ls -q) ]
+then
+    echo "Creating 'excalivol' volume"
+    docker volume create excalivol
+else
+    echo "Volume 'excalivol' already exists"
+fi
+
+#check if 'excalihost' database should be created
+if [ -z $(docker ps -f name=excalibur -q) ]
+then
+    echo "Creating 'excalihost' postgres server with 'excalibur' database"
+    docker run \
+    --rm \
+    --name excalihost \
+    -e POSTGRES_PASSWORD=postgres \
+    -e POSTGRES_DB=excalibur \
+    -d \
+    -p 5432:5432 \
+    -v excalivol:/var/lib/postgresql/data \
+    --network=bookingsnet
+    postgres
+else
+    echo "Postgres server 'excalihost' already running"
+fi
+
+#create host server
+docker build -t katzda/bookings:latest -f ./Dockerfile .
+
+#clean up: stopped containers
+containers_string=$(docker ps -f "status=exited" -q)
+if [ ${#containers_string} -gt 0 ]
+then
+    IFS=' ' read -a containers <<< $containers_string
+    echo "REMOVING ${#containers[@]} CONTAINER(S)):"
+    docker rm $containers_string
+else
+    echo "Containers don't need to be cleaned up."
+fi
+
+#clean up: dangling images
+images_string=$(docker images -f "dangling=true" -q)
+if [ ${#images_string} -gt 0 ]
+then
+    IFS=' ' read -a images <<< $images_string
+    echo "REMOVING ${#images[@]} IMAGE(S):"
+    docker rmi -f $images_string
+else
+    echo "Images don't need to be cleaned up."
+fi
+
+#setup the repo
+hostWorkspace=$(pwd)/../../..
+docker run -v $hostWorkspace:/home/developer \
+           --rm \
+           -d \
+           --name bookings \
+           -p 8080:80 \
+           --network=bookingsnet \
+           katzda/bookings:latest
+
+cd $hostWorkspace
+if ! (git clone git@github.com:katzda/booking-system.git -b develop) then
+    #it is possible that we have never generated ssh keys
+    cd ~/.ssh/
+    RSA=$(ls ~/.ssh | grep bookings_rsa*)
+    if [ ${#RSA} -eq 0 ]
+    then
+        echo "GENERATING ssh PRIVATE KEY and PUBLIC LOCK"
+        ssh-keygen -t rsa -b 4096 -C "bookings github repo" -P "" -f bookings_rsa
+    else
+        echo "PRIVATE KEY and PUBLIC LOCK already exist"
+    fi
+
+    echo "Please COPY the following PUBLIC KEY into your git repo:"
+    cat ~/.ssh/bookings_rsa.pub
+    echo "Then execute this file again."
+else
+    #docker exec -it bookings bash
+fi
