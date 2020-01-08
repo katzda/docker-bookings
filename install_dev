@@ -21,8 +21,17 @@ else
     echo "Volume 'excalivol' already exists"
 fi
 
+#check if a new network should be created
+if [ -z $(docker network ls -f name=bookingsnet -q) ]
+then
+    echo "Creating 'bookingsnet' network"
+    docker network create bookingsnet
+else
+    echo "Network 'bookingsnet' already exists"
+fi
+
 #check if 'excalihost' database should be created
-if [ -z $(docker ps -f name=excalibur -q) ]
+if [ -z $(docker ps -f name=excalihost -q) ]
 then
     echo "Creating 'excalihost' postgres server with 'excalibur' database"
     docker run \
@@ -33,7 +42,7 @@ then
     -d \
     -p 5432:5432 \
     -v excalivol:/var/lib/postgresql/data \
-    --network=bookingsnet
+    --network=bookingsnet \
     postgres
 else
     echo "Postgres server 'excalihost' already running"
@@ -82,12 +91,24 @@ docker run -v $INSTALL_DIR:/home/developer \
            --network=bookingsnet \
            katzda/bookings:latest
 
+#Securing connection to git without prompting
+github=$(grep -r -e "Host github.com" /home/katzda/.ssh/)
+if [ ! ${#github} -gt 0 ]
+then
+        echo "Host github.com
+                Hostname ssh.github.com
+                StrictHostKeyChecking no
+                Port 443" >> ~/.ssh/config
+else
+    echo "'Host github.com' entry in ~/.ssh/config is already set up"
+fi
+
 cd $INSTALL_DIR
 REPO="$INSTALL_DIR/booking-system"
 if [ ! -f "$REPO" ]; then
     #We have NOT cloned 'booking-system' before
-    echo "Cloning repo to: $INSTALL_DIR/booking-system/"
-    if ! (git clone git@github.com:katzda/booking-system.git -b develop) then
+    echo "Trying cloning private repo into: $INSTALL_DIR/booking-system/"
+    if ! (git clone -q -b develop git@github.com:katzda/booking-system.git) then
         echo "Cloning failed!"
 
         #it is possible that we have never generated ssh keys
@@ -99,11 +120,7 @@ if [ ! -f "$REPO" ]; then
             ssh-keygen -t rsa -b 4096 -C "bookings github repo" -P "" -f bookings_rsa
             eval $(ssh-agent -s)
             ssh-add ~/.ssh/bookings_rsa
-            echo "Host github.com
-                    Hostname ssh.github.com
-                    StrictHostKeyChecking no
-                    Port 443" >> ~/.ssh/config
-            ssh -T git@github.com
+            ssh -T katzda@github.com
         else
             echo "PRIVATE KEY and PUBLIC LOCK already exist"
         fi
