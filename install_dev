@@ -1,16 +1,34 @@
 #!/bin/bash
 
 #set default values
-INSTALL_DIR=/home/$USER
+INSTALL_DIR=$HOME
 
 #parse the passed parameters
-while getopts d:-/home/$USER option
+while getopts d: option
 do
     case "${option}"
     in
         d) INSTALL_DIR=${OPTARG};;
     esac
 done
+
+docker --version >/dev/null
+if [[ $? -eq 127 ]] ; then
+    #Error 127 means 'command not found'
+    echo "Installing DOCKER"
+    sudo apt-get update
+    sudo apt install docker.io -y
+    sudo systemctl start docker
+else
+    echo "Docker is already installed"
+fi
+
+echo "Detecting if docker service is running:"
+if [[ "$(sudo systemctl is-active docker.service)" == "active" ]] ; then
+    echo "Detecting if docker service is running: Success"
+else
+    echo "Detecting if docker service is running: Unable to detect (does it need a manual fix?)"
+fi
 
 #check if a new volume should be created
 if [ -z $(docker volume ls -q) ]
@@ -82,52 +100,65 @@ else
     echo "Images don't need to be cleaned up."
 fi
 
+#Securing connection to git without prompting
+github=$(grep -r -e "Host github.com" ~/.ssh/)
+if [ ! ${#github} -gt 0 ]
+then
+echo "Host github.com
+    Hostname ssh.github.com
+    StrictHostKeyChecking no
+    Port 89875" >> ~/.ssh/config
+else
+    echo "'Host github.com' entry in ~/.ssh/config is already set up"
+fi
+
+GitCloneRepo(){
+    # previous (git clone -b develop git@github.com:katzda/booking-system.git)
+    return [ git clone ssh://git@github.com:89875/katzda/booking-system.git ]
+}
+
+REPO_DIR="$INSTALL_DIR/booking-system/"
+cd $INSTALL_DIR
+HAD_ENV_EXISTED=false
+if [ ! -d "$REPO_DIR/.git" ] ; then
+    #Do the cloning
+    if ! GitCloneRepo ; then
+        echo "Cloning failed!"
+
+        #it is possible that we have never generated ssh keys
+        cd ~/.ssh/
+        RSA=$(ls ~/.ssh | grep bookings_rsa)
+        if [ ${#RSA} -eq 0 ] ; then
+            sudo chmod 755 ~/.ssh
+            echo "GENERATING ssh PRIVATE KEY and PUBLIC LOCK"
+            ssh-keygen -t rsa -b 4096 -C "${USER}_bookings_github_repo" -P "" -f bookings_rsa
+            eval $(ssh-agent -s)
+            ssh-add ~/.ssh/bookings_rsa
+        else
+            echo "PRIVATE KEY and PUBLIC LOCK already exist"
+            echo "Executing ssh verbose connection test:"
+            ssh -vT katzda@github.com
+
+            echo "Trying to clone again:"
+            if ! GitCloneRepo ; then
+                echo "Unsuccessful. Did you register this PUBLIC KEY in your repo:"
+                cat ~/.ssh/bookings_rsa.pub
+                echo "Then execute this file again or resolve whatever issue manually"
+                exit
+            fi
+        fi
+    fi
+else
+    HAD_ENV_EXISTED=true
+    echo "booking-system exists"
+fi
+
 #setup the repo
-docker run -v $INSTALL_DIR:/home/developer \
+echo "Creating katzda/bookings:latest container"
+docker run -v $REPO_DIR:/home/developer/booking-system \
            --rm \
            -d \
            --name bookings \
            -p 8080:80 \
            --network=bookingsnet \
            katzda/bookings:latest
-
-#Securing connection to git without prompting
-github=$(grep -r -e "Host github.com" /home/katzda/.ssh/)
-if [ ! ${#github} -gt 0 ]
-then
-        echo "Host github.com
-                Hostname ssh.github.com
-                StrictHostKeyChecking no
-                Port 443" >> ~/.ssh/config
-else
-    echo "'Host github.com' entry in ~/.ssh/config is already set up"
-fi
-
-cd $INSTALL_DIR
-REPO="$INSTALL_DIR/booking-system"
-if [ ! -f "$REPO" ]; then
-    #We have NOT cloned 'booking-system' before
-    echo "Trying cloning private repo into: $INSTALL_DIR/booking-system/"
-    if ! (git clone -q -b develop git@github.com:katzda/booking-system.git) then
-        echo "Cloning failed!"
-
-        #it is possible that we have never generated ssh keys
-        cd ~/.ssh/
-        RSA=$(ls ~/.ssh | grep bookings_rsa)
-        if [ ${#RSA} -eq 0 ]
-        then
-            echo "GENERATING ssh PRIVATE KEY and PUBLIC LOCK"
-            ssh-keygen -t rsa -b 4096 -C "bookings github repo" -P "" -f bookings_rsa
-            eval $(ssh-agent -s)
-            ssh-add ~/.ssh/bookings_rsa
-            ssh -T katzda@github.com
-        else
-            echo "PRIVATE KEY and PUBLIC LOCK already exist"
-        fi
-
-        echo "You need to register this PUBLIC KEY in your repo:"
-        cat ~/.ssh/bookings_rsa.pub
-        echo "Then execute this file again."
-        return 0
-    fi
-fi
