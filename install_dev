@@ -114,7 +114,23 @@ fi
 
 GitCloneRepo(){
     # previous (git clone -b develop git@github.com:katzda/booking-system.git)
-    return [ git clone ssh://git@github.com:89875/katzda/booking-system.git ]
+    if ! (git clone ssh://git@github.com:89875/katzda/booking-system.git) then
+        return 1
+    else
+        return 0
+    fi
+}
+
+CreateBookingsContainer(){
+    #setup the repo
+    echo "Creating katzda/bookings:latest container"
+    docker run -v $REPO_DIR:/home/developer/booking-system \
+            --rm \
+            -d \
+            --name bookings \
+            -p 8080:80 \
+            --network=bookingsnet \
+            katzda/bookings:latest
 }
 
 REPO_DIR="$INSTALL_DIR/booking-system/"
@@ -147,18 +163,12 @@ if [ ! -d "$REPO_DIR/.git" ] ; then
                 exit
             fi
         fi
+    else
+        echo "Repo cloning successful"
+        CreateBookingsContainer
     fi
 else
     HAD_ENV_EXISTED=true
-    echo "booking-system exists"
+    echo "Repo was already cloned"
+    CreateBookingsContainer
 fi
-
-#setup the repo
-echo "Creating katzda/bookings:latest container"
-docker run -v $REPO_DIR:/home/developer/booking-system \
-           --rm \
-           -d \
-           --name bookings \
-           -p 8080:80 \
-           --network=bookingsnet \
-           katzda/bookings:latest
