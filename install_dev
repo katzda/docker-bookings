@@ -30,6 +30,43 @@ else
     echo "Detecting if docker service is running: Unable to detect (does it need a manual fix?)"
 fi
 
+#detecting if samba is installed
+dpkg -s samba &>/dev/null
+if [[ $? -ne 0 ]] ; then
+    CONFIGURE_SAMBA=true
+    echo "Installing Samba"
+    sudo apt-get update
+    sudo apt install samba -y
+    mkdir $HOME/sambashare/
+    
+    sudo chmod 777 /etc/samba/smb.conf
+    sudo echo "[sambashare]
+    comment = Samba on Ubuntu
+    path = $HOME/sambashare
+    read only = no
+    browsable = yes" >> /etc/samba/smb.conf
+    sudo chmod 644 /etc/samba/smb.conf
+    
+    sudo service smbd restart
+    sudo ufw allow samba
+    
+    echo "Configuring SAMBA user; Please enter password for user '$USER':"
+    sudo smbpasswd -a $USER
+    
+else
+    CONFIGURE_SAMBA=false
+    echo "Samba is already installed"
+fi
+
+InstructionsSamba(){
+    echo " - Now in Windows in This PC, click 'Map network drive' and paste the following address (or if this is not the correct one, it simply needs to be the IP of this linux machine):"
+    adds=$(hostname -I)
+    for add in $adds; do echo "\\\\$add\sambashare"; break; done
+    echo " - Check 'Connect using different credentials'"
+    echo " - Make sure you use the '$USER' account and the password you used during configuration of Samba user."
+    echo " - Click OK"
+}
+
 #check if a new volume should be created
 if [ -z $(docker volume ls -q) ]
 then
@@ -171,4 +208,9 @@ else
     HAD_ENV_EXISTED=true
     echo "Repo was already cloned"
     CreateBookingsContainer
+fi
+
+#Print instructions for samba
+if [[ CONFIGURE_SAMBA ]] ; then 
+    InstructionsSamba
 fi
