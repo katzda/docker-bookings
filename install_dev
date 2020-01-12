@@ -1,18 +1,23 @@
 #!/bin/bash
 
 #set default values
-INSTALL_DIR=$HOME
-
+INSTALL_DIR=$HOME/sambashare
+CONFIGURE_SAMBA_FORCE=false
+HELP_TEXT=' -d <path> default is $INSTALL_DIR because that is how samba is configured automatically by this script\n
+-h Show this help text\n
+-s Display Samba configuration instructions for windows. This is done automatically if samba was just installed by this script'
 #parse the passed parameters
-while getopts d: option
+while getopts d:s:h: option
 do
     case "${option}"
     in
         d) INSTALL_DIR=${OPTARG};;
+        h) echo -e $HELP_TEXT
+        s) CONFIGURE_SAMBA_FORCE=true;;
     esac
 done
 
-docker --version >/dev/null
+docker --version &>/dev/null
 if [[ $? -eq 127 ]] ; then
     #Error 127 means 'command not found'
     echo "Installing DOCKER"
@@ -37,22 +42,22 @@ if [[ $? -ne 0 ]] ; then
     echo "Installing Samba"
     sudo apt-get update
     sudo apt install samba -y
-    mkdir $HOME/sambashare/
-    
+    mkdir $INSTALL_DIR
+
     sudo chmod 777 /etc/samba/smb.conf
     sudo echo "[sambashare]
     comment = Samba on Ubuntu
-    path = $HOME/sambashare
+    path = $INSTALL_DIR
     read only = no
     browsable = yes" >> /etc/samba/smb.conf
     sudo chmod 644 /etc/samba/smb.conf
-    
+
     sudo service smbd restart
     sudo ufw allow samba
-    
+
     echo "Configuring SAMBA user; Please enter password for user '$USER':"
     sudo smbpasswd -a $USER
-    
+
 else
     CONFIGURE_SAMBA=false
     echo "Samba is already installed"
@@ -138,26 +143,30 @@ else
 fi
 
 #Securing connection to git without prompting
-github=$(grep -r -e "Host github.com" ~/.ssh/)
+github=$(grep -r -e "Host github.com" ~/.ssh/ 2>/dev/null)
 if [ ! ${#github} -gt 0 ]
 then
-echo "Host github.com
-    Hostname ssh.github.com
-    StrictHostKeyChecking no
-    Port 89875" >> ~/.ssh/config
+    if [[ ! -d ~/.ssh ]] ; then
+        mkdir ~/.ssh
+    fi
+
+    echo "Host github.com
+        Hostname github.com
+        StrictHostKeyChecking no
+        Port 22" >> ~/.ssh/config
 else
     echo "'Host github.com' entry in ~/.ssh/config is already set up"
 fi
 
 GitCloneRepo(){
-    # previous (git clone -b develop git@github.com:katzda/booking-system.git)
-    if ! (git clone ssh://git@github.com:89875/katzda/booking-system.git) then
+    if ! (git clone -b develop git@github.com:katzda/booking-system.git) then
         return 1
     else
         return 0
     fi
 }
 
+REPO_DIR="$INSTALL_DIR/booking-system/"
 CreateBookingsContainer(){
     #setup the repo
     echo "Creating katzda/bookings:latest container"
@@ -170,7 +179,12 @@ CreateBookingsContainer(){
             katzda/bookings:latest
 }
 
-REPO_DIR="$INSTALL_DIR/booking-system/"
+PrintPublicKeyInfo(){
+    echo "Did you register this PUBLIC KEY in your repo?"
+    cat ~/.ssh/bookings_rsa.pub
+    echo "Then execute this file again or resolve whatever issue manually"
+}
+
 cd $INSTALL_DIR
 HAD_ENV_EXISTED=false
 if [ ! -d "$REPO_DIR/.git" ] ; then
@@ -187,6 +201,7 @@ if [ ! -d "$REPO_DIR/.git" ] ; then
             ssh-keygen -t rsa -b 4096 -C "${USER}_bookings_github_repo" -P "" -f bookings_rsa
             eval $(ssh-agent -s)
             ssh-add ~/.ssh/bookings_rsa
+            PrintPublicKeyInfo
         else
             echo "PRIVATE KEY and PUBLIC LOCK already exist"
             echo "Executing ssh verbose connection test:"
@@ -194,23 +209,21 @@ if [ ! -d "$REPO_DIR/.git" ] ; then
 
             echo "Trying to clone again:"
             if ! GitCloneRepo ; then
-                echo "Unsuccessful. Did you register this PUBLIC KEY in your repo:"
-                cat ~/.ssh/bookings_rsa.pub
-                echo "Then execute this file again or resolve whatever issue manually"
-                exit
+                echo "Unsuccessful."
+                PrintPublicKeyInfo
             fi
         fi
     else
-        echo "Repo cloning successful"
+        echo "Repo cloning was successful"
         CreateBookingsContainer
     fi
 else
     HAD_ENV_EXISTED=true
-    echo "Repo was already cloned"
+    echo "Repo is already cloned"
     CreateBookingsContainer
 fi
 
 #Print instructions for samba
-if [[ CONFIGURE_SAMBA ]] ; then 
+if [[ "$CONFIGURE_SAMBA" = true ]] || [[ "$CONFIGURE_SAMBA_FORCE" = true ]]; then
     InstructionsSamba
 fi
