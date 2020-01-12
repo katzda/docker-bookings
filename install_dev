@@ -3,17 +3,24 @@
 #set default values
 INSTALL_DIR=$HOME/sambashare
 CONFIGURE_SAMBA_FORCE=false
-HELP_TEXT=' -d <path> default is $INSTALL_DIR because that is how samba is configured automatically by this script\n
--h Show this help text\n
--s Display Samba configuration instructions for windows. This is done automatically if samba was just installed by this script'
+CONFIGURE_SSH=false
+SSH_VERBOUS=false
+HELP_TEXT='
+-h Help text\n
+-d <path=$INSTALL_DIR>\n
+-c Configuration: recreate private and public key pair\n
+-s Samba: Show configuration instructions for windows. This is done automatically if samba was just installed by this script\n
+-v verbous: Print debugging SSH connection info\n'
 #parse the passed parameters
-while getopts d:s:h: option
+while getopts h-:d:c-:s-:v- option
 do
     case "${option}"
     in
+        h) echo -e $HELP_TEXT; exit;;
+        c) CONFIGURE_SSH=true;;
         d) INSTALL_DIR=${OPTARG};;
-        h) echo -e $HELP_TEXT;;
         s) CONFIGURE_SAMBA_FORCE=true;;
+        v) SSH_VERBOUS=true;;
     esac
 done
 
@@ -21,25 +28,25 @@ docker --version &>/dev/null
 if [[ $? -eq 127 ]] ; then
     #Error 127 means 'command not found'
     echo "Installing DOCKER"
-    sudo apt-get update
+    sudo apt-get update >/dev/null
     sudo apt install docker.io -y
-    sudo groupadd docker
+    echo "Adding a 'docker' group"
+    sudo groupadd docker >/dev/null
     sudo usermod -aG docker $USER
-    sudo systemctl start docker
+    echo "Starting docker service"
+    sudo systemctl start docker >/dev/null
     sudo chown "$USER":"$USER" /home/"$USER"/.docker -R
     sudo chmod g+rwx "$HOME/.docker" -R
     echo "Because we had to install docker, we needed to logout and log in so we can run docker commands as a docker user."
     echo "Please log out and log in"
     exit
 else
-    echo "Docker is already installed"
-fi
-
-echo "Detecting if docker service is running:"
-if [[ "$(sudo systemctl is-active docker.service)" == "active" ]] ; then
-    echo "Detecting if docker service is running: Success"
-else
-    echo "Detecting if docker service is running: Unable to detect (does it need a manual fix?)"
+    echo "Detecting if docker service is running:"
+    if [[ "$(sudo systemctl is-active docker.service)" == "active" ]] ; then
+        echo "Detecting if docker service is running: Success"
+    else
+        echo "Detecting if docker service is running: Unable to detect (does it need some manual fix?)"
+    fi
 fi
 
 #detecting if samba is installed
@@ -47,10 +54,11 @@ dpkg -s samba &>/dev/null
 if [[ $? -ne 0 ]] ; then
     CONFIGURE_SAMBA=true
     echo "Installing Samba"
-    sudo apt-get update
+    sudo apt-get update >/dev/null
     sudo apt install samba -y
     mkdir $INSTALL_DIR
 
+    echo "New [sambashare] will point to $INSTALL_DIR"
     sudo chmod 777 /etc/samba/smb.conf
     sudo echo "[sambashare]
     comment = Samba on Ubuntu
@@ -64,7 +72,6 @@ if [[ $? -ne 0 ]] ; then
 
     echo "Configuring SAMBA user; Please enter password for user '$USER':"
     sudo smbpasswd -a $USER
-
 else
     CONFIGURE_SAMBA=false
     echo "Samba is already installed"
@@ -149,91 +156,141 @@ else
     echo "Images don't need to be cleaned up."
 fi
 
-#Securing connection to git without prompting
-github=$(grep -r -e "Host github.com" ~/.ssh/ 2>/dev/null)
-if [ ! ${#github} -gt 0 ] ; then
-    if [[ ! -d ~/.ssh ]] ; then
-        mkdir ~/.ssh
-    fi
+SSH_KEY_DIR=~/.ssh
+SSH_KEY_TITLE=bookings_rsa
 
-    echo "Host github.com
-        Hostname github.com
-        User katzda
-        IdentityFile ~/.ssh/bookings_rsa.pub
-        StrictHostKeyChecking no
-        Port 22" > ~/.ssh/config
-else
-    echo "'Host github.com' entry in ~/.ssh/config is already set up"
-fi
+SSHDirectoryDelete(){
+    echo "Deleting '$SSH_KEY_DIR' directory"
+    sudo rm -rf $SSH_KEY_DIR
+}
+
+SSHDirectoryExists(){
+    if [[ $CONFIGURE_SSH = true ]]; then SSHDirectoryDelete; fi
+    if [[ -d $SSH_KEY_DIR ]]; then return 0; else return 1; fi
+}
+
+SSHDirectoryCreate(){
+    mkdir $SSH_KEY_DIR;
+    chmod 750 $SSH_KEY_DIR
+    chown $USER:$USER $SSH_KEY_DIR
+}
+
+SSHConfigExists(){
+    ssh_host=$(grep -r -e "Host github.com" $SSH_KEY_DIR 2>/dev/null)
+    ssh_identity=$(grep -r -e "IdentityFile = $SSH_KEY_DIR/$SSH_KEY_TITLE.pub" $SSH_KEY_DIR 2>/dev/null)
+    if [ ${#ssh_host} -gt 0 ] && [ ${#ssh_identity} -gt 0 ];
+        then return 0;
+        else return 1;
+    fi
+}
+
+SSHConfigWrite(){
+    ssh_configuration_text="Host github.com\n"
+    ssh_configuration_text+="  Hostname github.com\n"
+    ssh_configuration_text+="  User katzda\n"
+    ssh_configuration_text+="  IdentityFile = $SSH_KEY_DIR/$SSH_KEY_TITLE.pub\n"
+    ssh_configuration_text+="  Port 22\n\n"
+    echo -e $ssh_configuration_text > $SSH_KEY_DIR/config
+}
+
+SSHKeyExists(){
+    RSA=$(ls $SSH_KEY_DIR | grep $SSH_KEY_TITLE)
+    if [[ ${#RSA} -eq 0 ]];
+        then return 1;
+        else return 0;
+    fi
+}
+
+SSHKeyGenerate(){
+    cd $SSH_KEY_DIR
+    ssh-keygen -t rsa -b 4096 -C "${USER}_bookings_github_repo" -P "" -f $SSH_KEY_TITLE
+    chmod 400 $SSH_KEY_DIR/$SSH_KEY_TITLE.pub
+    chmod 400 $SSH_KEY_DIR/$SSH_KEY_TITLE
+    eval $(ssh-agent -s)
+    ssh-add $SSH_KEY_DIR/$SSH_KEY_TITLE
+}
+
+REPO_TITLE=booking-system
+REPO_DIR="$INSTALL_DIR/$REPO_TITLE/"
 
 GitCloneRepo(){
-    if ! (git clone -b develop git@github.com:katzda/booking-system.git) then
+    cd $INSTALL_DIR
+    echo "Cloning repo"
+    if ! (git clone -b develop git@github.com:katzda/$REPO_TITLE.git);
+    then
+        if [ -d "$REPO_DIR" ] ; then sudo rm -rf $REPO_DIR; fi
+        echo "Cloning failed!"
         return 1
     else
+        echo "Cloning successful!"
         return 0
     fi
 }
 
-REPO_DIR="$INSTALL_DIR/booking-system/"
+GitRepoExists(){
+    if [[ -d $REPO_DIR ]] && [[ -d $REPO_DIR/.git ]]; then return 0; else return 1; fi
+}
+
+RepairSSHconfig(){
+    was_ssh_configuration_ok=0
+    #SSH Directory
+    if ! SSHDirectoryExists ; then
+        echo "Creating '$SSH_KEY_DIR' directory";
+        SSHDirectoryCreate;
+        was_ssh_configuration_ok=1;
+    fi
+    #SSH KEYS
+    if ! SSHKeyExists ; then
+        echo "Generating SSH PRIVATE KEY and PUBLIC LOCK"
+        SSHKeyGenerate
+        was_ssh_configuration_ok=1;
+    fi
+    #SSH/CONFIG FILE
+    if ! SSHConfigExists ; then
+        echo "(Re) writing SSH config settings ($SSH_KEY_DIR/config)"
+        SSHConfigWrite
+        was_ssh_configuration_ok=1;
+    fi
+    return $was_ssh_configuration_ok
+}
+
+#Configuring SSH
+if [[ ! RepairSSHconfig ]] || [[ $SSH_VERBOUS = true ]]; then
+    echo "Executing ssh verbose connection test:"
+    ssh -vT katzda@github.com
+else
+    echo "SSH was already setup correctly"
+fi
+
 CreateBookingsContainer(){
     #setup the repo
     echo "Creating katzda/bookings:latest container"
-    docker run -v $REPO_DIR:/home/developer/booking-system \
-            --rm \
-            -d \
-            --name bookings \
-            -p 8080:80 \
-            --network=bookingsnet \
-            katzda/bookings:latest
+    docker run -v $REPO_DIR:/home/developer/$REPO_TITLE \
+        --rm \
+        -d \
+        --name bookings \
+        -p 8080:80 \
+        --network=bookingsnet \
+        katzda/bookings:latest
 }
 
-PrintPublicKeyInfo(){
-    echo "Did you register this PUBLIC KEY in your repo?"
-    cat ~/.ssh/bookings_rsa.pub
-    echo "Then execute this file again or resolve whatever issue manually"
-}
-
-cd $INSTALL_DIR
-HAD_ENV_EXISTED=false
-if [ ! -d "$REPO_DIR/.git" ] ; then
-    #Do the cloning
-    if ! GitCloneRepo ; then
-        echo "Cloning failed!"
-
-        #it is possible that we have never generated ssh keys
-        cd ~/.ssh/
-        RSA=$(ls ~/.ssh | grep bookings_rsa)
-        if [ ${#RSA} -eq 0 ] ; then
-            sudo chmod 755 ~/.ssh
-            echo "GENERATING ssh PRIVATE KEY and PUBLIC LOCK"
-            ssh-keygen -t rsa -b 4096 -C "${USER}_bookings_github_repo" -P "" -f bookings_rsa
-            eval $(ssh-agent -s)
-            chmod 400 ~/.ssh/bookings_rsa.pub
-            chmod 400 ~/.ssh/bookings_rsa
-            ssh-add ~/.ssh/bookings_rsa
-            PrintPublicKeyInfo
-        else
-            echo "PRIVATE KEY and PUBLIC LOCK already exist"
-            echo "Executing ssh verbose connection test:"
-            ssh -vT katzda@github.com
-
-            echo "Trying to clone again:"
-            if ! GitCloneRepo ; then
-                echo "Unsuccessful."
-                PrintPublicKeyInfo
-            fi
-        fi
+#Git repo directory
+if ! GitRepoExists; then
+    if ! GitCloneRepo ;
+    then
+        echo "Did you register this PUBLIC KEY in your repo?"
+        cat $SSH_KEY_DIR/$SSH_KEY_TITLE.pub
+        echo "Something's wrong with SSH communication, exiting."
+        exit
     else
-        echo "Repo cloning was successful"
         CreateBookingsContainer
     fi
 else
-    HAD_ENV_EXISTED=true
     echo "Repo is already cloned"
     CreateBookingsContainer
 fi
 
-#Print instructions for samba
+#Samba instructions
 if [[ "$CONFIGURE_SAMBA" = true ]] || [[ "$CONFIGURE_SAMBA_FORCE" = true ]]; then
     InstructionsSamba
 fi
