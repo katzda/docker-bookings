@@ -12,7 +12,7 @@ do
     case "${option}"
     in
         d) INSTALL_DIR=${OPTARG};;
-        h) echo -e $HELP_TEXT
+        h) echo -e $HELP_TEXT;;
         s) CONFIGURE_SAMBA_FORCE=true;;
     esac
 done
@@ -23,7 +23,14 @@ if [[ $? -eq 127 ]] ; then
     echo "Installing DOCKER"
     sudo apt-get update
     sudo apt install docker.io -y
+    sudo groupadd docker
+    sudo usermod -aG docker $USER
     sudo systemctl start docker
+    sudo chown "$USER":"$USER" /home/"$USER"/.docker -R
+    sudo chmod g+rwx "$HOME/.docker" -R
+    echo "Because we had to install docker, we needed to logout and log in so we can run docker commands as a docker user."
+    echo "Please log out and log in"
+    exit
 else
     echo "Docker is already installed"
 fi
@@ -144,16 +151,17 @@ fi
 
 #Securing connection to git without prompting
 github=$(grep -r -e "Host github.com" ~/.ssh/ 2>/dev/null)
-if [ ! ${#github} -gt 0 ]
-then
+if [ ! ${#github} -gt 0 ] ; then
     if [[ ! -d ~/.ssh ]] ; then
         mkdir ~/.ssh
     fi
 
     echo "Host github.com
         Hostname github.com
+        User katzda
+        IdentityFile ~/.ssh/bookings_rsa.pub
         StrictHostKeyChecking no
-        Port 22" >> ~/.ssh/config
+        Port 22" > ~/.ssh/config
 else
     echo "'Host github.com' entry in ~/.ssh/config is already set up"
 fi
@@ -200,6 +208,8 @@ if [ ! -d "$REPO_DIR/.git" ] ; then
             echo "GENERATING ssh PRIVATE KEY and PUBLIC LOCK"
             ssh-keygen -t rsa -b 4096 -C "${USER}_bookings_github_repo" -P "" -f bookings_rsa
             eval $(ssh-agent -s)
+            chmod 400 ~/.ssh/bookings_rsa.pub
+            chmod 400 ~/.ssh/bookings_rsa
             ssh-add ~/.ssh/bookings_rsa
             PrintPublicKeyInfo
         else
