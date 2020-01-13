@@ -3,21 +3,21 @@
 #set default values
 INSTALL_DIR=$HOME/sambashare
 CONFIGURE_SAMBA_FORCE=false
-CONFIGURE_SSH=false
+FRESH=false
 SSH_VERBOUS=false
 HELP_TEXT='
 -h Help text\n
 -d <path=$INSTALL_DIR>\n
--c Configuration: recreate private and public key pair\n
+-f Fresh: Deletes the REPO (if exists), recreates private and public key pair\n
 -s Samba: Show configuration instructions for windows. This is done automatically if samba was just installed by this script\n
 -v verbous: Print debugging SSH connection info\n'
 #parse the passed parameters
-while getopts h-:d:c-:s-:v- option
+while getopts h-:d:f-:s-:v- option
 do
     case "${option}"
     in
         h) echo -e $HELP_TEXT; exit;;
-        c) CONFIGURE_SSH=true;;
+        f) FRESH=true;;
         d) INSTALL_DIR=${OPTARG};;
         s) CONFIGURE_SAMBA_FORCE=true;;
         v) SSH_VERBOUS=true;;
@@ -123,7 +123,7 @@ else
 fi
 
 #create host server
-docker build -t katzda/bookings:latest -f ./Dockerfile .
+docker build -t katzda/bookings:latest -f ./Dockerfile ../../
 
 #clean up: stopping previous container
 containers_string=$(docker ps -f name=bookings -q)
@@ -135,6 +135,7 @@ else
     echo "NO RUNNING bookings NEEDS STOPPING"
 fi
 
+#clean up: stopped containers
 containers_string=$(docker ps -f "status=exited" -q)
 if [ ${#containers_string} -gt 0 ]
 then
@@ -165,7 +166,7 @@ SSHDirectoryDelete(){
 }
 
 SSHDirectoryExists(){
-    if [[ $CONFIGURE_SSH = true ]]; then SSHDirectoryDelete; fi
+    if [[ $FRESH = true ]]; then SSHDirectoryDelete; fi
     if [[ -d $SSH_KEY_DIR ]]; then return 0; else return 1; fi
 }
 
@@ -177,7 +178,7 @@ SSHDirectoryCreate(){
 
 SSHConfigExists(){
     ssh_host=$(grep -r -e "Host github.com" $SSH_KEY_DIR 2>/dev/null)
-    ssh_identity=$(grep -r -e "IdentityFile = $SSH_KEY_DIR/$SSH_KEY_TITLE.pub" $SSH_KEY_DIR 2>/dev/null)
+    ssh_identity=$(grep -r -e "IdentityFile = $SSH_KEY_DIR/$SSH_KEY_TITLE" $SSH_KEY_DIR 2>/dev/null)
     if [ ${#ssh_host} -gt 0 ] && [ ${#ssh_identity} -gt 0 ];
         then return 0;
         else return 1;
@@ -188,7 +189,7 @@ SSHConfigWrite(){
     ssh_configuration_text="Host github.com\n"
     ssh_configuration_text+="  Hostname github.com\n"
     ssh_configuration_text+="  User katzda\n"
-    ssh_configuration_text+="  IdentityFile = $SSH_KEY_DIR/$SSH_KEY_TITLE.pub\n"
+    ssh_configuration_text+="  IdentityFile = $SSH_KEY_DIR/$SSH_KEY_TITLE\n"
     ssh_configuration_text+="  Port 22\n\n"
     echo -e $ssh_configuration_text > $SSH_KEY_DIR/config
 }
@@ -203,7 +204,7 @@ SSHKeyExists(){
 
 SSHKeyGenerate(){
     cd $SSH_KEY_DIR
-    ssh-keygen -t rsa -b 4096 -C "${USER}_bookings_github_repo" -P "" -f $SSH_KEY_TITLE
+    ssh-keygen -t rsa -b 4096 -C "${USER}_vm" -P "" -f $SSH_KEY_TITLE
     chmod 400 $SSH_KEY_DIR/$SSH_KEY_TITLE.pub
     chmod 400 $SSH_KEY_DIR/$SSH_KEY_TITLE
     eval $(ssh-agent -s)
@@ -228,6 +229,7 @@ GitCloneRepo(){
 }
 
 GitRepoExists(){
+    if [[ $FRESH = true ]]; then sudo rm -rf $REPO_DIR; fi;
     if [[ -d $REPO_DIR ]] && [[ -d $REPO_DIR/.git ]]; then return 0; else return 1; fi
 }
 
@@ -255,9 +257,13 @@ RepairSSHconfig(){
 }
 
 #Configuring SSH
-if [[ ! RepairSSHconfig ]] || [[ $SSH_VERBOUS = true ]]; then
-    echo "Executing ssh verbose connection test:"
-    ssh -vT katzda@github.com
+if ! RepairSSHconfig || [[ $SSH_VERBOUS = true ]]; then
+    echo "Executing ssh connection test:"
+    if [[ $SSH_VERBOUS = true ]]; then
+        ssh -vvvT katzda@github.com
+    else
+        ssh katzda@github.com
+    fi
 else
     echo "SSH was already setup correctly"
 fi
@@ -265,11 +271,12 @@ fi
 CreateBookingsContainer(){
     #setup the repo
     echo "Creating katzda/bookings:latest container"
-    docker run -v $REPO_DIR:/home/developer/$REPO_TITLE \
-        --rm \
+    docker run \
+        -v $REPO_DIR:/var/www/booking-system \
         -d \
         --name bookings \
-        -p 8080:80 \
+        -p 80:80 \
+        --rm \
         --network=bookingsnet \
         katzda/bookings:latest
 }
