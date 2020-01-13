@@ -1,5 +1,7 @@
 #!/bin/bash
 
+#not safe to run: deletes the whole .ssh directory
+
 #set default values
 INSTALL_DIR=$HOME/sambashare
 CONFIGURE_SAMBA_FORCE=false
@@ -50,7 +52,7 @@ else
 fi
 
 #detecting if samba is installed
-dpkg -s samba &>/dev/null
+sudo smbstatus &>/dev/null
 if [[ $? -ne 0 ]] ; then
     CONFIGURE_SAMBA=true
     echo "Installing Samba"
