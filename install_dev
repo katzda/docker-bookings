@@ -1,92 +1,18 @@
 #!/bin/bash
-
-#not safe to run: deletes the whole .ssh directory
-
-#set default values
-INSTALL_DIR=$HOME/sambashare
-CONFIGURE_SAMBA_FORCE=false
+. ./configs.sh
+INSTALL_DIR=$HOME/$SAMBA_SHARE_DIRECTORY
 FRESH=false
-SSH_VERBOUS=false
-HELP_TEXT='
--h Help text\n
--d <path=$INSTALL_DIR>\n
--f Fresh: Deletes the REPO (if exists), recreates private and public key pair\n
--s Samba: Show configuration instructions for windows. This is done automatically if samba was just installed by this script\n
--v verbous: Print debugging SSH connection info\n'
-#parse the passed parameters
-while getopts h-:d:f-:s-:v- option
+HELP_TEXT="-h Help text\n
+-f Fresh\n"
+
+while getopts h-:f-: option
 do
     case "${option}"
     in
         h) echo -e $HELP_TEXT; exit;;
         f) FRESH=true;;
-        d) INSTALL_DIR=${OPTARG};;
-        s) CONFIGURE_SAMBA_FORCE=true;;
-        v) SSH_VERBOUS=true;;
     esac
 done
-
-docker --version &>/dev/null
-if [[ $? -eq 127 ]] ; then
-    #Error 127 means 'command not found'
-    echo "Installing DOCKER"
-    sudo apt-get update >/dev/null
-    sudo apt install docker.io -y
-    echo "Adding a 'docker' group"
-    sudo groupadd docker >/dev/null
-    sudo usermod -aG docker $USER
-    echo "Starting docker service"
-    sudo systemctl start docker >/dev/null
-    sudo chown "$USER":"$USER" /home/"$USER"/.docker -R
-    sudo chmod g+rwx "$HOME/.docker" -R
-    echo "Because we had to install docker, we needed to logout and log in so we can run docker commands as a docker user."
-    echo "Please log out and log in"
-    exit
-else
-    echo "Detecting if docker service is running:"
-    if [[ "$(sudo systemctl is-active docker.service)" == "active" ]] ; then
-        echo "Detecting if docker service is running: Success"
-    else
-        echo "Detecting if docker service is running: Unable to detect (does it need some manual fix?)"
-    fi
-fi
-
-#detecting if samba is installed
-sudo smbstatus &>/dev/null
-if [[ $? -ne 0 ]] ; then
-    CONFIGURE_SAMBA=true
-    echo "Installing Samba"
-    sudo apt-get update >/dev/null
-    sudo apt install samba -y
-    mkdir $INSTALL_DIR
-
-    echo "New [sambashare] will point to $INSTALL_DIR"
-    sudo chmod 777 /etc/samba/smb.conf
-    sudo echo "[sambashare]
-    comment = Samba on Ubuntu
-    path = $INSTALL_DIR
-    read only = no
-    browsable = yes" >> /etc/samba/smb.conf
-    sudo chmod 644 /etc/samba/smb.conf
-
-    sudo service smbd restart
-    sudo ufw allow samba
-
-    echo "Configuring SAMBA user; Please enter password for user '$USER':"
-    sudo smbpasswd -a $USER
-else
-    CONFIGURE_SAMBA=false
-    echo "Samba is already installed"
-fi
-
-InstructionsSamba(){
-    echo " - Now in Windows in This PC, click 'Map network drive' and paste the following address (or if this is not the correct one, it simply needs to be the IP of this linux machine):"
-    adds=$(hostname -I)
-    for add in $adds; do echo "\\\\$add\sambashare"; break; done
-    echo " - Check 'Connect using different credentials'"
-    echo " - Make sure you use the '$USER' account and the password you used during configuration of Samba user."
-    echo " - Click OK"
-}
 
 #check if a new volume should be created
 if [ -z $(docker volume ls -q) ]
@@ -107,17 +33,24 @@ else
 fi
 
 #check if 'excalihost' database should be created
+#todo
+# warn or skip deleting database if given different db name or container name or user name or password or fresh flag
 if [ -z $(docker ps -f name=excalihost -q) ]
 then
-    echo "Creating 'excalihost' postgres server with 'excalibur' database"
+    if [ ${#DB_USER_PASSWORD} -eq 0 ]; then
+        echo "To create a DB, set a password in the configs.sh"
+        exit
+    fi
+    echo "Creating '$DB_CONTAINER_NAME' postgres server with '$DB_NAME' database"
     docker run \
     --rm \
-    --name excalihost \
-    -e POSTGRES_PASSWORD=postgres \
-    -e POSTGRES_DB=excalibur \
     -d \
-    -p 5432:5432 \
+    --name $DB_CONTAINER_NAME \
     -v excalivol:/var/lib/postgresql/data \
+    -p $DB_PORT:$DB_PORT \
+    -e POSTGRES_USER=$DB_USER_NAME \
+    -e POSTGRES_PASSWORD=$DB_USER_PASSWORD \
+    -e POSTGRES_DB=$DB_NAME \
     --network=bookingsnet \
     postgres
 else
@@ -125,7 +58,7 @@ else
 fi
 
 #create host server
-docker build -t katzda/bookings:latest -f ./Dockerfile ../../
+docker build -t katzda/bookings:latest -f ./Dockerfile .
 
 #clean up: stopping previous container
 containers_string=$(docker ps -f name=bookings -q)
@@ -159,60 +92,6 @@ else
     echo "Images don't need to be cleaned up."
 fi
 
-SSH_KEY_DIR=~/.ssh
-SSH_KEY_TITLE=bookings_rsa
-
-SSHDirectoryDelete(){
-    echo "Deleting '$SSH_KEY_DIR' directory"
-    sudo rm -rf $SSH_KEY_DIR
-}
-
-SSHDirectoryExists(){
-    if [[ $FRESH = true ]]; then SSHDirectoryDelete; fi
-    if [[ -d $SSH_KEY_DIR ]]; then return 0; else return 1; fi
-}
-
-SSHDirectoryCreate(){
-    mkdir $SSH_KEY_DIR;
-    chmod 750 $SSH_KEY_DIR
-    chown $USER:$USER $SSH_KEY_DIR
-}
-
-SSHConfigExists(){
-    ssh_host=$(grep -r -e "Host github.com" $SSH_KEY_DIR 2>/dev/null)
-    ssh_identity=$(grep -r -e "IdentityFile = $SSH_KEY_DIR/$SSH_KEY_TITLE" $SSH_KEY_DIR 2>/dev/null)
-    if [ ${#ssh_host} -gt 0 ] && [ ${#ssh_identity} -gt 0 ];
-        then return 0;
-        else return 1;
-    fi
-}
-
-SSHConfigWrite(){
-    ssh_configuration_text="Host github.com\n"
-    ssh_configuration_text+="  Hostname github.com\n"
-    ssh_configuration_text+="  User katzda\n"
-    ssh_configuration_text+="  IdentityFile = $SSH_KEY_DIR/$SSH_KEY_TITLE\n"
-    ssh_configuration_text+="  Port 22\n\n"
-    echo -e $ssh_configuration_text > $SSH_KEY_DIR/config
-}
-
-SSHKeyExists(){
-    RSA=$(ls $SSH_KEY_DIR | grep $SSH_KEY_TITLE)
-    if [[ ${#RSA} -eq 0 ]];
-        then return 1;
-        else return 0;
-    fi
-}
-
-SSHKeyGenerate(){
-    cd $SSH_KEY_DIR
-    ssh-keygen -t rsa -b 4096 -C "${USER}_vm" -P "" -f $SSH_KEY_TITLE
-    chmod 400 $SSH_KEY_DIR/$SSH_KEY_TITLE.pub
-    chmod 400 $SSH_KEY_DIR/$SSH_KEY_TITLE
-    eval $(ssh-agent -s)
-    ssh-add $SSH_KEY_DIR/$SSH_KEY_TITLE
-}
-
 REPO_TITLE=booking-system
 REPO_DIR="$INSTALL_DIR/$REPO_TITLE/"
 
@@ -231,54 +110,28 @@ GitCloneRepo(){
 }
 
 GitRepoExists(){
-    if [[ $FRESH = true ]]; then sudo rm -rf $REPO_DIR; fi;
+    if [[ $FRESH = true ]]; then
+        echo "Removing the whole $REPO_DIR directory."
+        sudo rm -rf $REPO_DIR;
+    fi;
     if [[ -d $REPO_DIR ]] && [[ -d $REPO_DIR/.git ]]; then return 0; else return 1; fi
 }
-
-RepairSSHconfig(){
-    was_ssh_configuration_ok=0
-    #SSH Directory
-    if ! SSHDirectoryExists ; then
-        echo "Creating '$SSH_KEY_DIR' directory";
-        SSHDirectoryCreate;
-        was_ssh_configuration_ok=1;
-    fi
-    #SSH KEYS
-    if ! SSHKeyExists ; then
-        echo "Generating SSH PRIVATE KEY and PUBLIC LOCK"
-        SSHKeyGenerate
-        was_ssh_configuration_ok=1;
-    fi
-    #SSH/CONFIG FILE
-    if ! SSHConfigExists ; then
-        echo "(Re) writing SSH config settings ($SSH_KEY_DIR/config)"
-        SSHConfigWrite
-        was_ssh_configuration_ok=1;
-    fi
-    return $was_ssh_configuration_ok
-}
-
-#Configuring SSH
-if ! RepairSSHconfig || [[ $SSH_VERBOUS = true ]]; then
-    echo "Executing ssh connection test:"
-    if [[ $SSH_VERBOUS = true ]]; then
-        ssh -vvvT katzda@github.com
-    else
-        ssh katzda@github.com
-    fi
-else
-    echo "SSH was already setup correctly"
-fi
 
 CreateBookingsContainer(){
     #setup the repo
     echo "Creating katzda/bookings:latest container"
     docker run \
         -v $REPO_DIR:/var/www/booking-system \
-        -d \
         --name bookings \
         -p 80:80 \
         --rm \
+        -it \
+        -e DB_NAME=$DB_NAME \
+        -e DB_CONTAINER_NAME=$DB_CONTAINER_NAME \
+        -e DB_USER_NAME=$DB_USER_NAME \
+        -e DB_USER_PASSWORD=$DB_USER_PASSWORD \
+        -e DB_PORT=$DB_PORT \
+        -e FRESH=$FRESH \
         --network=bookingsnet \
         katzda/bookings:latest
 }
@@ -288,7 +141,7 @@ if ! GitRepoExists; then
     if ! GitCloneRepo ;
     then
         echo "Did you register this PUBLIC KEY in your repo?"
-        cat $SSH_KEY_DIR/$SSH_KEY_TITLE.pub
+        cat ~/.ssh/$SSH_KEY_TITLE.pub
         echo "Something's wrong with SSH communication, exiting."
         exit
     else
@@ -297,9 +150,4 @@ if ! GitRepoExists; then
 else
     echo "Repo is already cloned"
     CreateBookingsContainer
-fi
-
-#Samba instructions
-if [[ "$CONFIGURE_SAMBA" = true ]] || [[ "$CONFIGURE_SAMBA_FORCE" = true ]]; then
-    InstructionsSamba
 fi

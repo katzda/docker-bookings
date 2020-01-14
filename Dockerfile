@@ -27,29 +27,18 @@ RUN apt-get update && apt-get install -y \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*;
 
-RUN sed -i "s/#ServerRoot \"\/etc\/apache2\"/ServerRoot \"\/etc\/apache2\"/" /etc/apache2/apache2.conf; \
+RUN bash -c "sed -i $'s/#ServerRoot \"\/etc\/apache2\"/\\\nServerName localhost\\\nServerRoot \"\/etc\/apache2\"/' /etc/apache2/apache2.conf;" \
     mkdir /var/www/booking-system; \
     cp /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/barbershop.conf; \
     sed -i "s/ServerAdmin webmaster@localhost/ServerAdmin danekkatz@gmail.com/" /etc/apache2/sites-available/barbershop.conf; \
-    sed -i "s/#ServerName www.example.com/ServerName www.barbershop.com/" /etc/apache2/sites-available/barbershop.conf; \
+    sed -i "s/#ServerName www.example.com/ServerName barbershop.com/" /etc/apache2/sites-available/barbershop.conf; \
     sed -i "s/DocumentRoot \/var\/www\/html/DocumentRoot \/var\/www\/booking-system\/BookingSystem\/public\//" /etc/apache2/sites-available/barbershop.conf; \
     a2ensite barbershop.conf;
 
-RUN mkdir /var/www/gci/; \
-    echo "<html><head><title> Ubuntu rocks! </title></head><body><p> I'm running this website on an Ubuntu Server server!</body></html>" > /var/www/gci/index.html; \
-    cp /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/gci.conf; \
-    sed -i "s/ServerAdmin webmaster@localhost/ServerAdmin dankatz@thegreat.com/" /etc/apache2/sites-available/gci.conf; \
-    sed -i "s/#ServerName www.example.com/ServerName gci.example.com/" /etc/apache2/sites-available/gci.conf; \
-    sed -i "s/DocumentRoot \/var\/www\/html/DocumentRoot \/var\/www\/gci\//" /etc/apache2/sites-available/gci.conf; \
-    a2ensite gci.conf;
-
 WORKDIR /var/www/booking-system/BookingSystem
 
-COPY . /home/developer
+COPY docker-entrypoint.sh /usr/local/bin
 
-EXPOSE 80
-
-ENTRYPOINT ["docker-entrypoint.sh"]
-
-CMD ["apachectl","-d /etc/apache2", "-e info", "-DFOREGROUND"]
+CMD bash
+#CMD apachectl -d /etc/apache2 -e info -DFOREGROUND
 
