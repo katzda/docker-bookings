@@ -1,29 +1,34 @@
 #!/bin/bash
 . ./configs.sh
 INSTALL_DIR=$HOME/$SAMBA_SHARE_DIRECTORY
-FRESH=false
+UNINSTALL=false
+SHOW_SAMBA_INSTRUCTIONS=false
 SSH_VERBOUS=false
 HELP_TEXT="-h This help text\n
--d SAMBA_SHARE_DIRECTORY: name of the samba share on the network (and the subdirectory under $HOME), default: $SAMBA_SHARE_DIRECTORY\n
--f fresh: reverts all system settings done by this file\n
--s Samba: Show configuration instructions for windows. This is done automatically if samba was just installed by this script\n
+-u Uninstall (unsupported yet): Should uninstall everything that this script has installed.\n
+-s Samba: Show configuration instructions for windows. This is done automatically when samba has just been installed\n
 -v verbous: Print debugging SSH connection info\n"
 
-while getopts h-:d:f:s-:v-: option
+while getopts u-:s-:v-:h-: option
 do
     case "${option}"
     in
-        h) echo -e $HELP_TEXT; exit;;
-        d) SAMBA_SHARE_DIRECTORY=${OPTARG};;
-        f) FRESH=true;;
-        s) CONFIGURE_SAMBA_FORCE=true;;
+        u) UNINSTALL=true;;
+        s) SHOW_SAMBA_INSTRUCTIONS=true;;
         v) SSH_VERBOUS=true;;
+        h) echo -e $HELP_TEXT; exit;;
     esac
 done
 
-docker --version &>/dev/null
-if [[ $? -eq 127 ]] ; then
-    #Error 127 means 'command not found'
+DockerIsInstalled(){
+    docker --version &>/dev/null
+    if [[ $? -ne 0 ]] ;
+    then return 1;
+    else return 0;
+    fi
+}
+
+DockerInstall(){
     echo "Installing DOCKER"
     sudo apt-get update >/dev/null
     sudo apt install docker.io -y
@@ -37,19 +42,25 @@ if [[ $? -eq 127 ]] ; then
     echo "Because we had to install docker, we needed to logout and log in so we can run docker commands as a docker user."
     echo "Please log out and log in"
     exit
-else
-    echo "Detecting if docker service is running:"
-    if [[ "$(sudo systemctl is-active docker.service)" == "active" ]] ; then
-        echo "Detecting if docker service is running: Success"
-    else
-        echo "Detecting if docker service is running: Unable to detect (does it need some manual fix?)"
-    fi
-fi
+}
 
-#detecting if samba is installed
-sudo smbstatus &>/dev/null
-if [[ $? -ne 0 ]] ; then
-    CONFIGURE_SAMBA=true
+DockerServiceIsRunning(){
+    if [[ "$(sudo systemctl is-active docker.service)" == "active" ]] ;
+    then return 0;
+    else return 1;
+    fi;
+}
+
+SambaIsInstalled(){
+    sudo smbstatus &>/dev/null
+    if [[ $? -ne 0 ]] ;
+    then return 1;
+    else return 0;
+    fi;
+}
+
+SambaInstall(){
+    SHOW_SAMBA_INSTRUCTIONS=true
     echo "Installing Samba"
     sudo apt-get update >/dev/null
     sudo apt install samba -y
@@ -69,10 +80,7 @@ if [[ $? -ne 0 ]] ; then
 
     echo "Configuring SAMBA user; Please enter password for user '$USER':"
     sudo smbpasswd -a $USER
-else
-    CONFIGURE_SAMBA=false
-    echo "Samba is already installed"
-fi
+}
 
 InstructionsSamba(){
     echo " - Now in Windows in This PC, click 'Map network drive' and paste the following address (or if this is not the correct one, it simply needs to be the IP of this linux machine):"
@@ -83,6 +91,24 @@ InstructionsSamba(){
     echo " - Click OK"
 }
 
+DockerComposeIsInstalled(){
+    docker-compose --version &>/dev/null
+    if [[ $? -ne 0 ]] ;
+    then return 1;
+    else return 0;
+    fi;
+}
+
+DockerComposeInstall(){
+    sudo curl -L "https://github.com/docker/compose/releases/download/1.25.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+}
+
+DockerComposeUninstall(){
+    sudo rm /usr/local/bin/docker-compose
+}
+
+SSH_KEY_TITLE=$WEB_DOMAIN_NAME
 SSHDirectoryExists(){
     if [[ -d ~/.ssh ]]; then return 0; else return 1; fi
 }
@@ -109,15 +135,18 @@ SSHConfigWrite(){
     ssh_configuration_text+="  IdentityFile = ~/.ssh/$SSH_KEY_TITLE\n";
     ssh_configuration_text+="  Port 22\n\n";
 
-    if [[ $FRESH = true ]]; then
+    echo -e $ssh_configuration_text >> ~/.ssh/config
+}
+
+SSHConfigUndo(){
+    if [[ $UNINSTALL = true ]]; then
         echo "Resetting the corresponsing txt configuration from ~/.ssh/config"
-        sed -z -i "s/Host github.com//;s/ Hostname github.com//;s/ User katzda//;s/ IdentityFile = .*$NUL Port 22//" ~/.ssh/config
+        sed -z -i "s/Host github.com//;s/ Hostname github.com//;s/ User katzda//;s/ IdentityFile = .*$NUL Port 22//;/^\s*$/ d" ~/.ssh/config
     fi
-    echo -e $ssh_configuration_text > ~/.ssh/config
 }
 
 SSHKeyExists(){
-    if [[ $FRESH = true ]]; then
+    if [[ $UNINSTALL = true ]]; then
         echo "Deleting these shh keys:";
         ll "${SSH_KEY_DIR}/${SSH_KEY_TITLE}*";
         rm "${SSH_KEY_DIR}/${SSH_KEY_TITLE}*";
@@ -161,7 +190,23 @@ RepairSSHconfig(){
     return $was_ssh_configuration_ok
 }
 
-#Configuring SSH
+#INSTALL DOCKER
+if ! DockerIsInstalled ; then
+    DockerInstall;
+fi
+
+#INSTALL SAMBA
+if ! SambaIsInstalled ; then
+else
+    SambaInstall;
+fi
+
+#INSTALL DOCKER COMPOSE
+if ! DockerComposeIsInstalled; then
+    DockerComposeInstall;
+fi;
+
+#CONFIGURE SSH
 if ! RepairSSHconfig || [[ $SSH_VERBOUS = true ]]; then
     echo "Executing ssh connection test:"
     if [[ $SSH_VERBOUS = true ]]; then
@@ -174,6 +219,6 @@ else
 fi
 
 #Samba instructions
-if [[ "$CONFIGURE_SAMBA" = true ]] || [[ "$CONFIGURE_SAMBA_FORCE" = true ]]; then
+if [[ "$SHOW_SAMBA_INSTRUCTIONS" = true ]]; then
     InstructionsSamba
 fi
