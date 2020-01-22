@@ -27,9 +27,15 @@ RUN cd /home/developer; \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*;
 
 RUN apt-get update && apt-get install -y apache2; \
-    mkdir /var/www/%GIT_REPO_TITLE%; \
-    cp /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/%WEB_DOMAIN_NAME%.conf; \
+    usermod -a -G developer www-data; \
+    usermod -g developer www-data; \
+    usermod -a -G www-data developer; \
+    mkdir /var/www/%GIT_REPO_TITLE%;
+
+RUN cp /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/%WEB_DOMAIN_NAME%.conf; \
     bash -c "sed -i $'s/#ServerRoot \"\/etc\/apache2\"/\\\nServerName localhost\\\nServerRoot \"\/etc\/apache2\"/' /etc/apache2/apache2.conf;"; \
+    sed -i -E -z "s/(<Directory \/var\/www\/>$NUL\s+Options Indexes FollowSymLinks$NUL\s+AllowOverride )(None)/\1All/" /etc/apache2/apache2.conf; \
+    a2enmod rewrite; \
     sed -i "s/ServerAdmin webmaster@localhost/ServerAdmin %email_address%/" /etc/apache2/sites-available/%WEB_DOMAIN_NAME%.conf; \
     sed -i "s/#ServerName www.example.com/ServerName %WEB_DOMAIN_NAME%%URL_ENDING%/" /etc/apache2/sites-available/%WEB_DOMAIN_NAME%.conf; \
     sed -i "s/DocumentRoot \/var\/www\/html/DocumentRoot \/var\/www\/%GIT_REPO_TITLE%\/%PATH_TO_PUBLIC_ESCAPED%\/public\//" /etc/apache2/sites-available/%WEB_DOMAIN_NAME%.conf; \
