@@ -209,32 +209,22 @@ DockerCleanUp(){
 }
 
 #Generating the REPO_DIR, cloning
-REPO_DIR="$INSTALL_DIR/$GIT_REPO_TITLE/"
+REPO_DIR="$INSTALL_DIR/$GIT_REPO_TITLE"
 GitCloneRepo(){
     cd $INSTALL_DIR
-    echo "Cloning repo"
-    if ! (git clone -b develop git@github.com:katzda/$GIT_REPO_TITLE.git);
-    then
-        if [ -d "$REPO_DIR" ] ; then sudo rm -rf $REPO_DIR; fi
-        echo "Cloning failed!"
-        return 1
-    else
-        echo "Cloning successful!"
-        return 0
-    fi
+    if ! (sudo -u $USER git clone -b develop git@github.com:katzda/$GIT_REPO_TITLE.git); then
+        if ! GitRepoExists ; then
+            sudo rm -rf $REPO_DIR/*; fi
+            return 1;
+        else return 0; fi;
 }
 IsUpToDate(){
-    if [[ -n $(git status | grep "Your branch is up to date") ]]; then
-        return 0;
-    else
-        return 1;
-    fi
+    if [[ -n $(git status | grep "Your branch is up to date") ]]; then return 0; else return 1; fi;
 }
 GitPull(){
     CWD=$(pwd)
     cd $INSTALL_DIR/$GIT_REPO_TITLE
-    echo "Pulling latest commits";
-    git fetch
+    sudo -u $USER git fetch
     if ! IsUpToDate; then
         git reset --hard "origin/$(git status | sed -E 's/On branch (.*)/\1/;q')";
     fi;
@@ -244,18 +234,23 @@ GitRepoExists(){
     if [[ -d $REPO_DIR ]] && [[ -d $REPO_DIR/.git ]]; then return 0; else return 1; fi
 }
 GitRepoDelete_(){
-    echo "Removing the whole $REPO_DIR directory."
     sudo rm -rf $REPO_DIR;
 }
 GitRepoDown(){
     if GitRepoExists; then
+        echo "Removing the whole $REPO_DIR directory."
         GitRepoDelete_;
     fi;
 }
 GitRepoUp(){
     if GitRepoExists; then
-        if GitPull; then return 0; else return 1; fi;
+        if [[ $IS_PROD_ENV = true ]]; then
+            print u"\u001b[31mPulling latest commits";
+            if GitPull; then return 0; else return 1; fi;
+        fi;
+        return 0;
     else
+        print u"\u001b[31mCloning repo";
         if GitCloneRepo ; then return 0; else return 1; fi;
     fi;
 }
@@ -274,9 +269,8 @@ DBWebServerCreate_(){
     docker build -t katzda/bookings:latest . -f -;
 
     #Create a container
-    echo "Creating katzda/bookings:latest container";
     docker run \
-        -v $REPO_DIR:/var/www/$GIT_REPO_TITLE \
+        -v $REPO_DIR/:/var/www/$GIT_REPO_TITLE \
         --name $WEBSERVER_HOSTNAME \
         -p 80:80 \
         -d \
@@ -285,24 +279,26 @@ DBWebServerCreate_(){
         -e UNINSTALL=$UNINSTALL \
         --network=$NETWORK_TITLE \
         katzda/bookings:latest;
-
-    #set up
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c "if [ ! -f .env ]; then mv /home/developer/.env /var/www/$GIT_REPO_TITLE/$PATH_TO_PUBLIC; fi;";
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'composer install && npm install && npm run dev --no-info --quiet';
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'if [[ -z $(cat .env | grep APP_KEY | sed -E "s/APP_KEY=(.*)$/\1/;s/\s+//;q") ]]; then php artisan key:generate; fi;';
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'php artisan migrate:refresh --seed';
 }
 DBWebServerDelete_(){
-    echo "REMOVING '$WEBSERVER_HOSTNAME' CONTAINER:"
     docker rm -f $(docker ps -f name="$WEBSERVER_HOSTNAME" -q)
 }
 DBWebServerUp(){
     if ! DBWebServerExists; then
+        echo "Creating katzda/bookings:latest image (and '$WEBSERVER_HOSTNAME' container)";
         DBWebServerCreate_;
     fi;
+    #set up
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c "chmod 775 storage/logs;";
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c "chmod 775 storage/framework;";
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c "if [ ! -f .env ]; then mv /home/developer/.env /var/www/$GIT_REPO_TITLE/$PATH_TO_PUBLIC; fi;";
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'composer install && npm install && npm run dev';
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'if [[ -z $(cat .env | grep APP_KEY | sed -E "s/APP_KEY=(.*)$/\1/;s/\s+//;q") ]]; then php artisan key:generate; fi;';
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'php artisan migrate:refresh --seed';
 }
 DBWebServerDown(){
     if DBWebServerExists; then
+        echo "REMOVING '$WEBSERVER_HOSTNAME' CONTAINER:"
         DBWebServerDelete_;
     fi;
 }
@@ -317,7 +313,6 @@ if [[ $UNINSTALL = true ]]; then
     DockerCleanUp;
     DBWebServerDown;
 else
-    DockerCleanUp;
     NetworkUp;
     VolumeUp;
     DBHostUp;

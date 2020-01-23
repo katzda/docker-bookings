@@ -5,7 +5,7 @@
 
 SAMBA_SHARE_DIRECTORY=sambashare
 
-#affects docker file
+IS_PROD_ENV=false
 EMAIL_ADDRESS=your@email.com
 WEB_DOMAIN_NAME=barbershop
 URL_ENDING=.com
