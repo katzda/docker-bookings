@@ -3,18 +3,22 @@
 INSTALL_DIR=$HOME/$SAMBA_SHARE_DIRECTORY
 UNINSTALL=false
 SHOW_SAMBA_INSTRUCTIONS=false
+SHOW_SSH_INSTRUCTIONS=false
 SSH_VERBOUS=false
 HELP_TEXT="-h This help text\n
 -u Uninstall (unsupported yet): Should uninstall everything that this script has installed.\n
 -s Samba: Show configuration instructions for windows. This is done automatically when samba has just been installed\n
--v verbous: Print debugging SSH connection info\n"
+-v verbous: Print debugging SSH connection info\n
+-p public key: will display public key instructions. This is also done automatically if they needed to be generated."
 
-while getopts u-:s-:v-:h-: option
+TEXT_HIGHLIGHT="#########################################################################################################";
+while getopts u-:s-:v-:h-:p-: option
 do
     case "${option}"
     in
         u) UNINSTALL=true;;
         s) SHOW_SAMBA_INSTRUCTIONS=true;;
+        p) SHOW_SSH_INSTRUCTIONS=true;;
         v) SSH_VERBOUS=true;;
         h) echo -e $HELP_TEXT; exit;;
     esac
@@ -39,8 +43,7 @@ DockerInstall(){
     sudo systemctl start docker >/dev/null
     sudo chown "$USER":"$USER" /home/"$USER"/.docker -R
     sudo chmod g+rwx "$HOME/.docker" -R
-    echo "Because we had to install docker, we needed to logout and log in so we can run docker commands as a docker user."
-    echo "Please log out and log in"
+    echo -e "\n$TEXT_HIGHLIGHT\n$TEXT_HIGHLIGHT\nBecause we had to install docker, we needed to logout and log in so we can run docker commands without sudo.\n\nPlease log out now, log back in and execute this file again.\n$TEXT_HIGHLIGHT\n$TEXT_HIGHLIGHT\n";
     exit
 }
 
@@ -61,34 +64,34 @@ SambaIsInstalled(){
 
 SambaInstall(){
     SHOW_SAMBA_INSTRUCTIONS=true
-    echo "Installing Samba"
+    echo -e "Installing Samba"
     sudo apt-get update >/dev/null
     sudo apt install samba -y
     mkdir $INSTALL_DIR
 
-    echo "New [$SAMBA_SHARE_DIRECTORY] will point to $INSTALL_DIR"
+    echo -e "New [$SAMBA_SHARE_DIRECTORY] will point to $INSTALL_DIR"
     sudo chmod 777 /etc/samba/smb.conf
-    sudo echo "[$SAMBA_SHARE_DIRECTORY]
+    sudo echo -e "[$SAMBA_SHARE_DIRECTORY]
     comment = Samba on Ubuntu
     path = $INSTALL_DIR
     read only = no
     browsable = yes" >> /etc/samba/smb.conf
     sudo chmod 644 /etc/samba/smb.conf
 
-    sudo service smbd restart
     sudo ufw allow samba
 
-    echo "Configuring SAMBA user; Please enter password for user '$USER':"
+    echo -e "Configuring SAMBA user; Please enter password for user '$USER':"
     sudo smbpasswd -a $USER
+    sudo service smbd restart
 }
 
 InstructionsSamba(){
-    echo " - Now in Windows in This PC, click 'Map network drive' and paste the following address (or if this is not the correct one, it simply needs to be the IP of this linux machine):"
+    echo -e "$TEXT_HIGHLIGHT\n$TEXT_HIGHLIGHT\n - Now, in Windows in This PC, click 'Map network drive' and paste the following address into the 'folder' field (the only field where you can paste anything). Just in case if this is not the correct IP address, it simply is the one of this linux machine):\n"
     adds=$(hostname -I)
     for add in $adds; do echo "\\\\$add\\$SAMBA_SHARE_DIRECTORY"; break; done
-    echo " - Check 'Connect using different credentials'"
-    echo " - Make sure you use the '$USER' account and the password you used during configuration of Samba user."
-    echo " - Click OK"
+    echo -e "\n - Check 'Connect using different credentials'"
+    echo -e " - Make sure you use the '$USER' account and the password you used during configuration of Samba user."
+    echo -e " - Click OK\n$TEXT_HIGHLIGHT\n$TEXT_HIGHLIGHT\n";
 }
 
 DockerComposeIsInstalled(){
@@ -140,14 +143,14 @@ SSHConfigWrite(){
 
 SSHConfigUndo(){
     if [[ $UNINSTALL = true ]]; then
-        echo "Resetting the corresponsing txt configuration from ~/.ssh/config"
+        echo -e "Resetting the corresponsing txt configuration from ~/.ssh/config"
         sed -z -i "s/Host github.com//;s/ Hostname github.com//;s/ User katzda//;s/ IdentityFile = .*$NUL Port 22//;/^\s*$/ d" ~/.ssh/config
     fi
 }
 
 SSHKeyExists(){
     if [[ $UNINSTALL = true ]]; then
-        echo "Deleting these shh keys:";
+        echo -e "Deleting these shh keys:";
         ll "${SSH_KEY_DIR}/${SSH_KEY_TITLE}*";
         rm "${SSH_KEY_DIR}/${SSH_KEY_TITLE}*";
     fi;
@@ -159,12 +162,21 @@ SSHKeyExists(){
 }
 
 SSHKeyGenerate(){
+    SHOW_SSH_INSTRUCTIONS=true;
+    CWD="$(pwd)"
     cd ~/.ssh
     ssh-keygen -t rsa -b 4096 -C "${USER}_vm" -P "" -f $SSH_KEY_TITLE
     chmod 400 ~/.ssh/$SSH_KEY_TITLE.pub
     chmod 400 ~/.ssh/$SSH_KEY_TITLE
     eval $(ssh-agent -s)
     ssh-add ~/.ssh/$SSH_KEY_TITLE
+    cd "$CWD";
+}
+
+PrintPublicKeyInfo(){
+    echo -e "\n$TEXT_HIGHLIGHT\nContact the owner of the target repository and ask them to register the following public key (without empty line breaks and these hightlighing '#'):\n$TEXT_HIGHLIGHT\n";
+    cat ~/.ssh/bookings_rsa.pub
+    echo -e "\n$TEXT_HIGHLIGHT\nThen execute this file again or resolve whatever issue manually\n$TEXT_HIGHLIGHT\n"
 }
 
 RepairSSHconfig(){
@@ -213,11 +225,19 @@ if ! RepairSSHconfig || [[ $SSH_VERBOUS = true ]]; then
     else
         ssh katzda@github.com
     fi
-else
-    echo "SSH was already setup correctly"
 fi
 
 #Samba instructions
 if [[ "$SHOW_SAMBA_INSTRUCTIONS" = true ]]; then
     InstructionsSamba
 fi
+
+#SSH instructions
+if [[ "$SHOW_SSH_INSTRUCTIONS" = true ]]; then
+    PrintPublicKeyInfo
+fi
+
+#Final message
+if DockerIsInstalled && SambaIsInstalled && DockerComposeIsInstalled; then
+    echo "This script did its job. All done!";
+fi;
