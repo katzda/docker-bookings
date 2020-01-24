@@ -12,4 +12,4 @@ Allows deploymment of the corresponding private repo, provided I registered your
 
 ---------------------------------------------------------
 - For development on windows it is practical to install "mtputty" and "putty", link "mtputty" to use "putty" so you can ssh and work easily with the linux VM, rather working with the actual VM directly (hassle).
-- After all installation is done, your repository will live in the samba share directory mapped into the docker container, so you'll be able to access the files from windows ThisPC and use any kind of Windows PHP editor.
+- After all installation is done, your repository will live in the samba share directory mapped into the docker container, so you'll be able to access the files from windows ThisPC and use any kind of Windows IDE.
