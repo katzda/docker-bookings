@@ -197,7 +197,6 @@ fi
 
 #INSTALL SAMBA
 if ! SambaIsInstalled ; then
-else
     SambaInstall;
 fi
 

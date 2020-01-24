@@ -289,8 +289,7 @@ DBWebServerUp(){
         DBWebServerCreate_;
     fi;
     #set up
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c "chmod 775 storage/logs;";
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c "chmod 775 storage/framework;";
+    docker exec $WEBSERVER_HOSTNAME bash -c "chmod 775 -R storage";
     docker exec -u developer $WEBSERVER_HOSTNAME bash -c "if [ ! -f .env ]; then mv /home/developer/.env /var/www/$GIT_REPO_TITLE/$PATH_TO_PUBLIC; fi;";
     docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'composer install && npm install && npm run dev';
     docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'if [[ -z $(cat .env | grep APP_KEY | sed -E "s/APP_KEY=(.*)$/\1/;s/\s+//;q") ]]; then php artisan key:generate; fi;';
