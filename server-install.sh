@@ -264,7 +264,7 @@ fi;
 
 #CONFIGURE SSH
 if ! RepairSSHconfig || [[ $SSH_VERBOUS = true ]]; then
-    SHOW_SSH_INSTRUCTIONS = true
+    SHOW_SSH_INSTRUCTIONS=true
     echo "Executing ssh connection test:"
     if [[ $SSH_VERBOUS = true ]]; then
         ssh -vvvT katzda@github.com
@@ -280,6 +280,7 @@ fi
 
 #SSH instructions
 if [[ "$SHOW_SSH_INSTRUCTIONS" = true ]]; then
+    echo "Printing public key info:";
     PrintPublicKeyInfo
 fi
 
