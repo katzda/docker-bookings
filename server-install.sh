@@ -24,12 +24,44 @@ do
     esac
 done
 
+
+SudoIsInstalled(){
+    sudo -V &>/dev/null;
+    if [[ $? -ne 0 ]] ;
+    then return 1;
+    else return 0;
+    fi
+}
+SudoInstall(){
+    echo "Please enter your superuser password:"
+    apt-get update;
+    apt-get install sudo;
+    usermod -aG sudo $USER;
+    if SudoIsInstalled; then
+        echo "Program 'sudo' has been installed successfuly";
+    else
+        echo "Could not install sudo, exiting!";
+        exit;
+    fi;
+}
+
+CurlIsInstalled(){
+    curl -V &>/dev/null;
+    if [[ $? -ne 0 ]] ;
+    then return 1;
+    else return 0;
+    fi;
+}
+CurlInstall(){
+    sudo apt-get install curl;
+}
+
 DockerIsInstalled(){
     docker --version &>/dev/null
     if [[ $? -ne 0 ]] ;
     then return 1;
     else return 0;
-    fi
+    fi;
 }
 
 DockerInstall(){
@@ -163,7 +195,6 @@ SSHKeyExists(){
 }
 
 SSHKeyGenerate(){
-    SHOW_SSH_INSTRUCTIONS=true;
     CWD="$(pwd)"
     cd ~/.ssh
     ssh-keygen -t rsa -b 4096 -C "${USER}_vm" -P "" -f $SSH_KEY_TITLE
@@ -202,6 +233,19 @@ RepairSSHconfig(){
     fi
     return $was_ssh_configuration_ok
 }
+
+
+#INSTALL SUDO
+if ! SudoIsInstalled ; then
+    echo "installing sudo";
+    SudoInstall;
+fi
+
+#INSTALL CURL
+if ! CurlIsInstalled ; then
+    echo "installing curl";
+    CurlInstall;
+fi
 
 #INSTALL DOCKER
 if ! DockerIsInstalled ; then
