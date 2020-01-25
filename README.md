@@ -22,5 +22,5 @@ Allows deploymment of the corresponding private repo, provided I registered your
 8. Run the "./install.sh" script and enjoy the magic. (also supports '-h' flag)
 
 ---------------------------------------------------------
-- For development on windows it is practical to install "mtputty" and "putty", link "mtputty" to use "putty" so you can ssh and work easily with the linux VM, rather than working with the actual VM directly (hassle).
+- For development on windows it is practical to install on windows "mtputty" and "putty", link "mtputty" to use "putty" so you can ssh and work easily with the linux VM, rather than working with the actual VM directly (hassle).
 - After all installation is done, your repository will live in the samba share directory mapped into the docker container, so you'll be able to access the files from windows ThisPC and use any kind of Windows IDE (e.g VSCode)
