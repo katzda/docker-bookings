@@ -1,7 +1,18 @@
 # docker-bookings
 Allows deploymment of the corresponding private repo, provided I registered your public key
 
-1. You need ubuntu 18.04 LTS (be it a VM in a virtual box or an actual server)
+1. You need ubuntu 18.04 LTS from https://ubuntu.com/download/server
+  Settings which work in VirtualBox:
+  a) RAM 2048MB
+  b) HDD dynamic 100GB
+  c) during installation, set up static IP mapping 
+      - run ipconfig in windows, say your current IP is 192.168.1.3 and gateway 192.168.254
+      - name server will be same as gateway
+      - network name will end with zero slash mask, e.g 192.168.1.0/24
+  d) if it crashes during installation, just start again and it will work
+  e) fill in your details like name (josh xxx), server name (my_vm), password (6145),... 
+  f) do select install open-ssh and proceed through until restart, remove media, boot up
+  g) sudo apt-get update && sudo apt-get upgrade && sudo apt-get install git-all
 2. cd into your home dir "cd ~/"
 3. git clone this repo
 4. cd inside the cloned repo
