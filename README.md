@@ -2,7 +2,7 @@
 Allows deploymment of the corresponding private repo, provided I registered your public key
 
 1. You need ubuntu 18.04 LTS from https://ubuntu.com/download/server<br>
-  <i>Settings which work in VirtualBox:<br>
+  Settings which work in VirtualBox:<br><i>
   a) RAM 2048MB<br>
   b) HDD dynamic 100GB<br>
   c) during installation, set up static IP mapping<br>
