@@ -78,6 +78,7 @@ SambaInstall(){
     browsable = yes" >> /etc/samba/smb.conf
     sudo chmod 644 /etc/samba/smb.conf
 
+    sudo service smbd restart
     sudo ufw allow samba
 
     echo -e "Configuring SAMBA user; Please enter password for user '$USER':"
