@@ -175,7 +175,7 @@ SSHKeyGenerate(){
 
 PrintPublicKeyInfo(){
     echo -e "\n$TEXT_HIGHLIGHT\nContact the owner of the target repository and ask them to register the following public key (without empty line breaks and these hightlighing '#'):\n$TEXT_HIGHLIGHT\n";
-    cat ~/.ssh/bookings_rsa.pub
+    cat ~/.ssh/$SSH_KEY_TITLE.pub
     echo -e "\n$TEXT_HIGHLIGHT\nThen execute this file again or resolve whatever issue manually\n$TEXT_HIGHLIGHT\n"
 }
 
@@ -219,6 +219,7 @@ fi;
 
 #CONFIGURE SSH
 if ! RepairSSHconfig || [[ $SSH_VERBOUS = true ]]; then
+    SHOW_SSH_INSTRUCTIONS = true
     echo "Executing ssh connection test:"
     if [[ $SSH_VERBOUS = true ]]; then
         ssh -vvvT katzda@github.com
