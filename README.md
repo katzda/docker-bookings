@@ -2,17 +2,17 @@
 Allows deploymment of the corresponding private repo, provided I registered your public key
 
 1. You need ubuntu 18.04 LTS from https://ubuntu.com/download/server
-  Settings which work in VirtualBox:
-  a) RAM 2048MB
-  b) HDD dynamic 100GB
-  c) during installation, set up static IP mapping 
-      - run ipconfig in windows, say your current IP is 192.168.1.3 and gateway 192.168.254
-      - name server will be same as gateway
-      - network name will end with zero slash mask, e.g 192.168.1.0/24
-  d) if it crashes during installation, just start again and it will work
-  e) fill in your details like name (josh xxx), server name (my_vm), password (6145),... 
-  f) do select install open-ssh and proceed through until restart, remove media, boot up
-  g) sudo apt-get update && sudo apt-get upgrade && sudo apt-get install git-all
+  Settings which work in VirtualBox:<br>
+  a) RAM 2048MB<br>
+  b) HDD dynamic 100GB<br>
+  c) during installation, set up static IP mapping<br>
+        -run ipconfig in windows, say your current IP is 192.168.1.3 and gateway 192.168.254<br>
+        -name server will be same as gateway<br>
+        -network name will end with zero slash mask, e.g 192.168.1.0/24<br>
+  d) if it crashes during installation, just start again and it will work<br>
+  e) fill in your details like name (josh xxx), server name (my_vm), password (6145),... <br>
+  f) do select install open-ssh and proceed through until restart, remove media, boot up <br>
+  g) sudo apt-get update && sudo apt-get upgrade && sudo apt-get install git-all<br>
 2. cd into your home dir "cd ~/"
 3. git clone this repo
 4. cd inside the cloned repo
