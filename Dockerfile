@@ -30,26 +30,24 @@ RUN apt-get update && apt-get install -y apache2; \
     usermod -a -G developer www-data; \
     usermod -g developer www-data; \
     usermod -a -G www-data developer; \
-    mkdir /var/www/%GIT_REPO_TITLE%;
+    mkdir /var/www/%WEB_DOMAIN_NAME%%URL_ENDING%;
 
-RUN cp /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/%WEB_DOMAIN_NAME%.conf; \
+RUN mv /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/%WEB_DOMAIN_NAME%%URL_ENDING%.conf; \
     bash -c "sed -i $'s/#ServerRoot \"\/etc\/apache2\"/\\\nServerName localhost\\\nServerRoot \"\/etc\/apache2\"/' /etc/apache2/apache2.conf;"; \
     sed -i -E -z "s/(<Directory \/var\/www\/>$NUL\s+Options Indexes FollowSymLinks$NUL\s+AllowOverride )(None)/\1All/" /etc/apache2/apache2.conf; \
     a2enmod rewrite; \
-    sed -i "s/ServerAdmin webmaster@localhost/ServerAdmin %email_address%/" /etc/apache2/sites-available/%WEB_DOMAIN_NAME%.conf; \
-    sed -i "s/#ServerName www.example.com/ServerName %WEB_DOMAIN_NAME%%URL_ENDING%/" /etc/apache2/sites-available/%WEB_DOMAIN_NAME%.conf; \
-    sed -i "s/DocumentRoot \/var\/www\/html/DocumentRoot \/var\/www\/%GIT_REPO_TITLE%\/%PATH_TO_PUBLIC_ESCAPED%\/public\//" /etc/apache2/sites-available/%WEB_DOMAIN_NAME%.conf; \
-    a2ensite %WEB_DOMAIN_NAME%.conf;
+    sed -i "s/ServerAdmin webmaster@localhost/ServerAdmin %email_address%/" /etc/apache2/sites-available/%WEB_DOMAIN_NAME%%URL_ENDING%.conf; \
+    sed -i "s/#ServerName www.example.com/ServerName %WEB_DOMAIN_NAME%%URL_ENDING%/" /etc/apache2/sites-available/%WEB_DOMAIN_NAME%%URL_ENDING%.conf; \
+    sed -i "s/DocumentRoot \/var\/www\/html/DocumentRoot \/var\/www\/%WEB_DOMAIN_NAME%%URL_ENDING%\/%PATH_TO_PUBLIC_ESCAPED%\/public\//" /etc/apache2/sites-available/%WEB_DOMAIN_NAME%%URL_ENDING%.conf; \
+    a2ensite %WEB_DOMAIN_NAME%%URL_ENDING%.conf;
 
-WORKDIR /var/www/%GIT_REPO_TITLE%/%PATH_TO_PUBLIC%
+WORKDIR /var/www/%WEB_DOMAIN_NAME%%URL_ENDING%/%PATH_TO_PUBLIC%
 
 USER developer
 
 COPY .env /home/developer/.env
 
 RUN sed -i "s/&WEB_DOMAIN_NAME&/$WEB_DOMAIN_NAME/;s/&DB_CONTAINER_NAME&/$DB_CONTAINER_NAME/;s/&DB_PORT&/$DB_PORT/;s/&DB_NAME&/$DB_NAME/;s/&DB_USER_NAME&/$DB_USER_NAME/;s/&DB_USER_PASSWORD&/$DB_USER_PASSWORD/;" /home/developer/.env
-
-EXPOSE 80 443 8001
 
 USER root
 

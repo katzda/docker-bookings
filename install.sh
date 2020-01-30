@@ -3,15 +3,19 @@
 INSTALL_DIR=$HOME/$SAMBA_SHARE_DIRECTORY
 UNINSTALL=false
 PURGE=false
+CLEAN_REPO=false
 IMAGES=false
+SKIP_POST_INSTALLATION_STEPS=false
 INSTALL_DEV_CWD=$(pwd)
 HELP_TEXT="This script will install the DB container, create a database with a user, create an image and a container for the web server, download the git repo - making sure it contains the latest commit, run composer, npm install and dev compilation and php artisan command for DB migration. By default every run of this script (install or uninstall deletes dangling images and stopped containers)\n
 -h Help text\n
--U UNINSTALL: this will delete the 'configured' Volume, DB, Server, Network and the git REPO and then exit. Can be used with -p and -i flags.\n
+-U UNINSTALL: this will delete the 'configured' Volume, DB, Server, Network and the git REPO and then exit. Can be used with -p, -c and -i flags.\n
 -p purge: Deletes all running containers (not just the configured ones), all existing volumes and all networks. This is a goood flag to use often if you are constantly renaming your webserver in the 'configs' file etc and have some previous containers to remove you forgot to uninstall with -U. But this will affect all docker containers and all webservers on the system.\n
--i images: Delete all docker images as well";
+-i images: Delete all docker images as well\n
+-c clean repo: This can only be used together with -U\n
+-s SKIP_POST_INSTALLATION_STEPS - e.g ./install -s will only update docker image but skip the composer and npm install (useful if you are working on docker file and dont want to wait for these irrelevant install steps)";
 
-while getopts h-:U-:p-:i-: option
+while getopts h-:U-:p-:i-:c-:s-: option
 do
     case "${option}"
     in
@@ -19,6 +23,8 @@ do
         U) UNINSTALL=true;;
         p) PURGE=true;;
         i) IMAGES=true;;
+        c) CLEAN_REPO=true;;
+        s) SKIP_POST_INSTALLATION_STEPS=true;;
     esac
 done
 
@@ -53,6 +59,7 @@ NetworkDelete_(){
 }
 NetworkUp(){
     if ! NetworkExists; then
+        echo "Network does not exist"
         NetworkCreate_;
     fi;
 }
@@ -196,18 +203,6 @@ DockerImagesDown(){
     DockerDeleteImagesAll_;
 }
 
-DockerCleanUp(){
-    DockerDeleteContainersExited_;
-    DockerDeleteImagesDangling_;
-    DockerDeleteContainersConfigured_;
-    if [[ $PURGE = true ]]; then
-        DockerAllDown;
-    fi;
-    if [[ $IMAGES = true ]]; then
-        DockerImagesDown;
-    fi;
-}
-
 #Generating the REPO_DIR, cloning
 REPO_DIR="$INSTALL_DIR/$GIT_REPO_TITLE"
 GitCloneRepo(){
@@ -259,24 +254,43 @@ WEBSERVER_HOSTNAME="${WEB_DOMAIN_NAME}Host";
 DBWebServerExists(){
     if [ -z $(docker ps -f name="$WEBSERVER_HOSTNAME" -q) ]; then return 1; else return 0; fi;
 }
+Debug(){
+    echo "REPO_DIR=$REPO_DIR";
+    echo "GIT_REPO_TITLE=$GIT_REPO_TITLE";
+    echo "PATH_TO_PUBLIC=$PATH_TO_PUBLIC";
+    echo "PATH_TO_PUBLIC_ESCAPED=$PATH_TO_PUBLIC_ESCAPED";
+    echo "PATH_TO_PUBLIC_ESCAPED_TWICE=$PATH_TO_PUBLIC_ESCAPED_TWICE";
+    echo "DB_CONTAINER_NAME=$DB_CONTAINER_NAME";
+    echo "EMAIL_ADDRESS=$EMAIL_ADDRESS";
+    echo "WEB_DOMAIN_NAME=$WEB_DOMAIN_NAME";
+    echo "URL_ENDING=$URL_ENDING";
+    echo "GIT_REPO_TITLE=$GIT_REPO_TITLE";
+    echo "DB_PORT=$DB_PORT";
+    echo "DB_NAME=$DB_NAME";
+    echo "DB_USER_NAME=$DB_USER_NAME";
+    echo "DB_USER_PASSWORD=$DB_USER_PASSWORD";
+    echo "IP_ADDRESS=$IP_ADDRESS";
+    echo "NETWORK_TITLE=$NETWORK_TITLE";
+    exit;
+}
 DBWebServerCreate_(){
     cd $INSTALL_DEV_CWD;
     PATH_TO_PUBLIC=$(find $REPO_DIR -name index.php | sed -E "s/(.*?)\/$GIT_REPO_TITLE(\/.*)\/public\/index\.php/\2/;s/\/(.*)$/\1/");
     PATH_TO_PUBLIC_ESCAPED=$(echo $PATH_TO_PUBLIC | sed 's/\//\\\//');
     PATH_TO_PUBLIC_ESCAPED_TWICE=$(echo $PATH_TO_PUBLIC_ESCAPED | sed 's/\//\\\\\//');
     IP_ADDRESS=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $DB_CONTAINER_NAME);
-    sed "s/%email_address%/$EMAIL_ADDRESS/;s/%WEB_DOMAIN_NAME%/$WEB_DOMAIN_NAME/g;s/%URL_ENDING%/$URL_ENDING/;s/%GIT_REPO_TITLE%/$GIT_REPO_TITLE/;s/%PATH_TO_PUBLIC%/$PATH_TO_PUBLIC_ESCAPED/;s/%PATH_TO_PUBLIC_ESCAPED%/$PATH_TO_PUBLIC_ESCAPED_TWICE/;s/\$DB_CONTAINER_NAME/$DB_CONTAINER_NAME/;s/\$DB_PORT/$DB_PORT/;s/\$DB_NAME/$DB_NAME/;s/\$DB_USER_NAME/$DB_USER_NAME/;s/\$DB_USER_PASSWORD/$DB_USER_PASSWORD/;s/\$WEB_DOMAIN_NAME/$WEB_DOMAIN_NAME/;" ./Dockerfile | \
+
+    sed "s/%email_address%/$EMAIL_ADDRESS/;s/%WEB_DOMAIN_NAME%/$WEB_DOMAIN_NAME/g;s/%URL_ENDING%/$URL_ENDING/g;s/%GIT_REPO_TITLE%/$GIT_REPO_TITLE/;s/%PATH_TO_PUBLIC%/$PATH_TO_PUBLIC_ESCAPED/;s/%PATH_TO_PUBLIC_ESCAPED%/$PATH_TO_PUBLIC_ESCAPED_TWICE/;s/\$DB_CONTAINER_NAME/$DB_CONTAINER_NAME/;s/\$DB_PORT/$DB_PORT/;s/\$DB_NAME/$DB_NAME/;s/\$DB_USER_NAME/$DB_USER_NAME/;s/\$DB_USER_PASSWORD/$DB_USER_PASSWORD/;s/\$WEB_DOMAIN_NAME/$WEB_DOMAIN_NAME/;" ./Dockerfile | \
     docker build -t katzda/bookings:latest . -f -;
 
     #Create a container
     docker run \
-        -v $REPO_DIR/:/var/www/$GIT_REPO_TITLE \
+        -v $REPO_DIR/:/var/www/$WEB_DOMAIN_NAME$URL_ENDING \
         --name $WEBSERVER_HOSTNAME \
-        -p 80:80 \
+        -p 8080:80 \
         -d \
         --rm \
         --add-host=$DB_CONTAINER_NAME:$IP_ADDRESS \
-        -e UNINSTALL=$UNINSTALL \
         --network=$NETWORK_TITLE \
         katzda/bookings:latest;
 }
@@ -284,21 +298,42 @@ DBWebServerDelete_(){
     docker rm -f $(docker ps -f name="$WEBSERVER_HOSTNAME" -q)
 }
 DBWebServerUp(){
-    if ! DBWebServerExists; then
-        echo "Creating katzda/bookings:latest image (and '$WEBSERVER_HOSTNAME' container)";
-        DBWebServerCreate_;
+    if DBWebServerExists; then
+        DBWebServerDown;
     fi;
-    #set up
-    docker exec $WEBSERVER_HOSTNAME bash -c "chmod 775 -R storage";
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c "if [ ! -f .env ]; then mv /home/developer/.env /var/www/$GIT_REPO_TITLE/$PATH_TO_PUBLIC; fi;";
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'composer install && npm install && npm run dev';
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'if [[ -z $(cat .env | grep APP_KEY | sed -E "s/APP_KEY=(.*)$/\1/;s/\s+//;q") ]]; then php artisan key:generate; fi;';
-    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'php artisan migrate:refresh --seed';
+
+    DBWebServerCreate_;
+
+    if [[ $SKIP_POST_INSTALLATION_STEPS = false ]]; then
+        docker exec $WEBSERVER_HOSTNAME bash -c "chmod 775 -R storage";
+        docker exec -u developer $WEBSERVER_HOSTNAME bash -c "if [ ! -f .env ]; then mv /home/developer/.env /var/www/$WEB_DOMAIN_NAME$URL_ENDING/$PATH_TO_PUBLIC; fi;";
+        docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'composer install && npm install && npm run dev';
+        docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'if [[ -z $(cat .env | grep APP_KEY | sed -E "s/APP_KEY=(.*)$/\1/;s/\s+//;q") ]]; then php artisan key:generate; fi;';
+        docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'php artisan migrate';
+    fi;
 }
 DBWebServerDown(){
     if DBWebServerExists; then
         echo "REMOVING '$WEBSERVER_HOSTNAME' CONTAINER:"
         DBWebServerDelete_;
+    fi;
+}
+
+CleanUp(){
+    DockerDeleteContainersExited_;
+    DockerDeleteImagesDangling_;
+    DockerDeleteContainersConfigured_;
+
+    if [[ $PURGE = true ]]; then
+        DockerAllDown;
+    fi;
+
+    if [[ $IMAGES = true ]]; then
+        DockerImagesDown;
+    fi;
+
+    if [[ $CLEAN_REPO = true ]]; then
+        GitRepoDown;
     fi;
 }
 
@@ -308,8 +343,7 @@ if [[ $UNINSTALL = true ]]; then
     DockerDeleteNetworkConfigured_;
     NetworkDown;
     VolumeDown;
-    GitRepoDown;
-    DockerCleanUp;
+    CleanUp;
     DBWebServerDown;
 else
     NetworkUp;

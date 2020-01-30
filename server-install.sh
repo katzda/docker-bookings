@@ -94,6 +94,10 @@ SambaIsInstalled(){
     fi;
 }
 
+SambaIsConfigured(){
+    sed -zE "s/(\[)\w+(\]\s*$NUL\s*comment = Samba on Ubuntu$NUL\s*path = \/home\/$USER\/)\w+/\1$SAMBA_SHARE_DIRECTORY\2$SAMBA_SHARE_DIRECTORY/" /etc/samba/smb.conf
+}
+
 SambaInstall(){
     SHOW_SAMBA_INSTRUCTIONS=true
     echo -e "Installing Samba"
@@ -204,6 +208,17 @@ SSHKeyGenerate(){
     ssh-add ~/.ssh/$SSH_KEY_TITLE
     cd "$CWD";
 }
+SSHKeyTest(){
+    echo "Executing SSH connectivity test";
+    if [[ $SSH_VERBOUS = true ]];
+        then ssh -vT git@github.com
+        else ssh -T git@github.com
+    fi;
+    if [[ $? -eq 1 ]];
+    then return 0;
+    else return 1;
+    fi;
+}
 
 PrintPublicKeyInfo(){
     echo -e "\n$TEXT_HIGHLIGHT\nContact the owner of the target repository and ask them to register the following public key (without empty line breaks and these hightlighing '#'):\n$TEXT_HIGHLIGHT\n";
@@ -211,29 +226,26 @@ PrintPublicKeyInfo(){
     echo -e "\n$TEXT_HIGHLIGHT\nThen execute this file again or resolve whatever issue manually\n$TEXT_HIGHLIGHT\n"
 }
 
-RepairSSHconfig(){
-    was_ssh_configuration_ok=0
+SSHCheckHealth(){
     #SSH Directory
     if ! SSHDirectoryExists ; then
         echo "Creating '~/.ssh' directory";
         SSHDirectoryCreate;
-        was_ssh_configuration_ok=1;
-    fi
+    fi;
     #SSH KEYS
     if ! SSHKeyExists ; then
         echo "Generating SSH PRIVATE KEY and PUBLIC LOCK"
         SSHKeyGenerate
-        was_ssh_configuration_ok=1;
-    fi
+    fi;
     #SSH/CONFIG FILE
     if ! SSHConfigExists ; then
         echo "(Re) writing SSH config settings (~/.ssh/config)"
         SSHConfigWrite
-        was_ssh_configuration_ok=1;
-    fi
-    return $was_ssh_configuration_ok
+    fi;
+    if ! SSHKeyTest; then
+        SHOW_SSH_INSTRUCTIONS=true;
+    fi;
 }
-
 
 #INSTALL SUDO
 if ! SudoIsInstalled ; then
@@ -249,29 +261,24 @@ fi
 
 #INSTALL DOCKER
 if ! DockerIsInstalled ; then
+    echo "installing docker";
     DockerInstall;
 fi
 
 #INSTALL SAMBA
 if ! SambaIsInstalled ; then
+    echo "installing samba";
     SambaInstall;
 fi
 
 #INSTALL DOCKER COMPOSE
 if ! DockerComposeIsInstalled; then
+    echo "installing docker compose";
     DockerComposeInstall;
 fi;
 
-#CONFIGURE SSH
-if ! RepairSSHconfig || [[ $SSH_VERBOUS = true ]]; then
-    SHOW_SSH_INSTRUCTIONS=true
-    echo "Executing ssh connection test:"
-    if [[ $SSH_VERBOUS = true ]]; then
-        ssh -vvvT katzda@github.com
-    else
-        ssh katzda@github.com
-    fi
-fi
+#Check SSH
+SSHCheckHealth;
 
 #Samba instructions
 if [[ "$SHOW_SAMBA_INSTRUCTIONS" = true ]]; then
