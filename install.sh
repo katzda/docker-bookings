@@ -287,7 +287,7 @@ DBWebServerCreate_(){
     docker run \
         -v $REPO_DIR/:/var/www/$WEB_DOMAIN_NAME$URL_ENDING \
         --name $WEBSERVER_HOSTNAME \
-        -p 8080:80 \
+        -p 80:80 \
         -d \
         --rm \
         --add-host=$DB_CONTAINER_NAME:$IP_ADDRESS \

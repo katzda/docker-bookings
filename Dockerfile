@@ -5,7 +5,7 @@ LABEL maintainer="Daniel Katz"
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y \
-    sudo curl npm git nano vim unzip iputils-ping;
+    sudo curl npm git nano vim unzip iputils-ping silversearcher-ag;
 
 RUN useradd developer -m; \
     usermod -aG sudo developer;
@@ -32,7 +32,8 @@ RUN apt-get update && apt-get install -y apache2; \
     usermod -a -G www-data developer; \
     mkdir /var/www/%WEB_DOMAIN_NAME%%URL_ENDING%;
 
-RUN mv /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/%WEB_DOMAIN_NAME%%URL_ENDING%.conf; \
+RUN a2dissite 000-default.conf; \
+    mv /etc/apache2/sites-available/000-default.conf /etc/apache2/sites-available/%WEB_DOMAIN_NAME%%URL_ENDING%.conf; \
     bash -c "sed -i $'s/#ServerRoot \"\/etc\/apache2\"/\\\nServerName localhost\\\nServerRoot \"\/etc\/apache2\"/' /etc/apache2/apache2.conf;"; \
     sed -i -E -z "s/(<Directory \/var\/www\/>$NUL\s+Options Indexes FollowSymLinks$NUL\s+AllowOverride )(None)/\1All/" /etc/apache2/apache2.conf; \
     a2enmod rewrite; \
