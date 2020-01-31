@@ -209,9 +209,12 @@ GitCloneRepo(){
     cd $INSTALL_DIR
     if ! (sudo -u $USER git clone -b develop git@github.com:katzda/$GIT_REPO_TITLE.git); then
         if ! GitRepoExists ; then
-            sudo rm -rf $REPO_DIR/*; fi
-            return 1;
-        else return 0; fi;
+            sudo rm -rf $REPO_DIR/*;
+        fi
+        return 1;
+    else
+        return 0;
+    fi;
 }
 IsUpToDate(){
     if [[ -n $(git status | grep "Your branch is up to date") ]]; then return 0; else return 1; fi;
@@ -240,12 +243,10 @@ GitRepoDown(){
 GitRepoUp(){
     if GitRepoExists; then
         if [[ $IS_PROD_ENV = true ]]; then
-            print u"\u001b[31mPulling latest commits";
             if GitPull; then return 0; else return 1; fi;
         fi;
         return 0;
     else
-        print u"\u001b[31mCloning repo";
         if GitCloneRepo ; then return 0; else return 1; fi;
     fi;
 }

@@ -1,4 +1,8 @@
 #!/bin/bash
+
+if [[ ! -e configs.sh ]]; then
+    cp ./configs.sh-example ./configs.sh
+fi;
 . ./configs.sh
 INSTALL_DIR=$HOME/$SAMBA_SHARE_DIRECTORY
 UNINSTALL=false
@@ -24,7 +28,50 @@ do
     esac
 done
 
-
+Apache2IsUninstalled(){
+    sudo service apache2 status &>/dev/null;
+    if [[ $? -ne 4 ]] ;
+        then return 1;
+        else return 0;
+    fi
+}
+Apache2Uninstall(){
+    sudo service apache2 stop;
+    sudo apt-get purge apache2 apache2-utils apache2.2-bin -y;
+}
+Apache2Down(){
+    if ! Apache2IsUninstalled ; then
+        echo "Uninstalling Apache2 Server (because it's blocking port 80 and we have it inside docker)";
+        Apache2Uninstall;
+    fi;
+}
+OpenSSHIsInstalled(){
+    sudo dpkg -l openssh-server &>/dev/null
+    if [[ $? -ne 0 ]] ;
+        then return 1;
+        else return 0;
+    fi
+}
+OpenSSHInstall(){
+    sudo apt-get update;
+    sudo apt-get install openssh-server -y;
+}
+OpenSSHUninstall(){
+    sudo service ssh stop;
+    apt-get –purge remove openssh-server -y;
+}
+OpenSSHServerUP(){
+    if ! OpenSSHIsInstalled ; then
+        echo "installing OpenSSH Server";
+        OpenSSHInstall;
+    fi
+}
+OpenSSHServerDown(){
+    if OpenSSHIsInstalled ; then
+        echo "Uninstalling OpenSSH Server";
+        OpenSSHUninstall;
+    fi
+}
 SudoIsInstalled(){
     sudo -V &>/dev/null;
     if [[ $? -ne 0 ]] ;
@@ -247,6 +294,9 @@ SSHCheckHealth(){
     fi;
 }
 
+Apache2Down;
+OpenSSHServerUP;
+
 #INSTALL SUDO
 if ! SudoIsInstalled ; then
     echo "installing sudo";
@@ -293,5 +343,5 @@ fi
 
 #Final message
 if DockerIsInstalled && SambaIsInstalled && DockerComposeIsInstalled; then
-    echo "This script did its job. All done!";
+    echo -e "This script did its job. All done!\nNow don't forget to set a password in configs.sh and run ./install.sh";
 fi;
