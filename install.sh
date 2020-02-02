@@ -28,19 +28,21 @@ do
     esac
 done
 
-if  [[ ${#EMAIL_ADDRESS} -eq 0 ]] || \
+if  [[ ${#IS_PROD_ENV} -eq 0 ]] || \
+    [[ ${#BRANCH_DEV} -eq 0 ]] || \
+    [[ ${#BRANCH_PROD} -eq 0 ]] || \
+    [[ ${#EMAIL_ADDRESS} -eq 0 ]] || \
     [[ ${#WEB_DOMAIN_NAME} -eq 0 ]] || \
     [[ ${#URL_ENDING} -eq 0 ]] || \
-    [[ ${#GIT_REPO_TITLE} -eq 0 ]] || \
     [[ ${#DB_NAME} -eq 0 ]] || \
     [[ ${#DB_USER_NAME} -eq 0 ]] || \
     [[ ${#DB_PORT} -eq 0 ]] || \
-    [[ ${#DB_USER_PASSWORD} -eq 0 ]];
+    [[ ${#DB_USER_PASSWORD} -eq 0 ]] || \
+    [[ ${#GITHUB_CLONE_SSH_URL} -eq 0 ]];
 then
     echo "Please supply information for all parameters in 'config.sh':"
-    echo -e "EMAIL_ADDRESS\nWEB_DOMAIN_NAME\nURL_ENDING\nGIT_REPO_TITLE\nDB_NAME\nDB_USER_NAME\nDB_PORT\nDB_USER_PASSWORD";
     exit
-fi
+fi;
 
 NETWORK_TITLE="${WEB_DOMAIN_NAME}Network"
 NetworkExists(){
@@ -50,21 +52,20 @@ NetworkExists(){
     fi
 }
 NetworkCreate_(){
-    echo "Creating network: '$NETWORK_TITLE'";
     docker network create $NETWORK_TITLE
 }
 NetworkDelete_(){
-    echo "Deleting network: '$NETWORK_TITLE'";
     docker network rm $(docker network ls -f name="$NETWORK_TITLE" -q)
 }
 NetworkUp(){
     if ! NetworkExists; then
-        echo "Network does not exist"
+        echo "Creating network: '$NETWORK_TITLE'";
         NetworkCreate_;
     fi;
 }
 NetworkDown(){
     if NetworkExists; then
+        echo "Deleting network: '$NETWORK_TITLE'";
         NetworkDelete_;
     fi;
 }
@@ -77,33 +78,32 @@ VolumeExists(){
     fi
 }
 VolumeCreate_(){
-    echo "Creating volume: '$VOLUME_TITLE'";
     docker volume create $VOLUME_TITLE
 }
 VolumeDelete_(){
-    echo "Deleting volume: '$VOLUME_TITLE'";
     docker volume rm $(docker volume ls -f name="$VOLUME_TITLE" -q)
 }
 VolumeUp(){
     if ! VolumeExists; then
+        echo "Creating volume: '$VOLUME_TITLE'";
         VolumeCreate_;
     fi;
 }
 VolumeDown(){
     if VolumeExists; then
+        echo "Deleting volume: '$VOLUME_TITLE'";
         VolumeDelete_;
     fi;
 }
 
 DB_CONTAINER_NAME="${DB_NAME}Host"
 DBHostExists(){
-    if [ -z $(docker ps -f name="$DB_CONTAINER_NAME" -q) ];
+    if [ -z $(docker ps -a -f name="$DB_CONTAINER_NAME" -q) ];
     then return 1;
     else return 0;
     fi
 }
 DBHostCreate_(){
-    echo "Creating '$DB_CONTAINER_NAME' postgres server with '$DB_NAME' database"
     docker run \
     --rm \
     -d \
@@ -117,16 +117,17 @@ DBHostCreate_(){
     postgres
 }
 DBHostDelete_(){
-    echo "Deleting '$DB_CONTAINER_NAME' postgres host container."
-    docker rm -f $(docker ps -f name="$DB_CONTAINER_NAME" -q)
+    docker rm -f $(docker ps -a -f name="$DB_CONTAINER_NAME" -q)
 }
 DBHostUp(){
     if ! DBHostExists; then
+        echo "Creating '$DB_CONTAINER_NAME' postgres server with '$DB_NAME' database"
         DBHostCreate_;
     fi
 }
 DBHostDown(){
     if DBHostExists; then
+        echo "Deleting '$DB_CONTAINER_NAME' postgres host container."
         DBHostDelete_;
     fi
 }
@@ -204,10 +205,17 @@ DockerImagesDown(){
 }
 
 #Generating the REPO_DIR, cloning
+GIT_REPO_USERNAME=$(echo $GITHUB_CLONE_SSH_URL | sed -E "s/.*:([a-z]+)\/[a-z.\-]+/\1/");
+GIT_REPO_TITLE=$(echo $GITHUB_CLONE_SSH_URL | sed -E "s/.*:[a-z]+\/([a-z.\-]+)\.git/\1/");
+if [[ $IS_PROD_ENV = true ]]; then
+    BRANCH_TO_USE=$BRANCH_PROD;
+else
+    BRANCH_TO_USE=$BRANCH_DEV;
+fi;
 REPO_DIR="$INSTALL_DIR/$GIT_REPO_TITLE"
 GitCloneRepo(){
-    cd $INSTALL_DIR
-    if ! (sudo -u $USER git clone -b develop git@github.com:katzda/$GIT_REPO_TITLE.git); then
+    mkdir $REPO_DIR;
+    if ! (sudo -u $USER git clone -b $BRANCH_TO_USE $GITHUB_CLONE_SSH_URL $REPO_DIR); then
         if ! GitRepoExists ; then
             sudo rm -rf $REPO_DIR/*;
         fi
@@ -216,16 +224,19 @@ GitCloneRepo(){
         return 0;
     fi;
 }
-IsUpToDate(){
-    if [[ -n $(git status | grep "Your branch is up to date") ]]; then return 0; else return 1; fi;
+IsOnTheRightBranch(){
+    if [[ $BRANCH_TO_USE = $(git status | sed -E 's/On branch (.*)/\1/;q') ]];
+        then return 0;
+        else return 1;
+    fi;
 }
 GitPull(){
     CWD=$(pwd)
     cd $INSTALL_DIR/$GIT_REPO_TITLE
     sudo -u $USER git fetch
-    if ! IsUpToDate; then
-        git reset --hard "origin/$(git status | sed -E 's/On branch (.*)/\1/;q')";
-    fi;
+    git reset --hard "origin/$(git status | sed -E 's/On branch (.*)/\1/;q')";
+    git checkout $BRANCH_TO_USE;
+    git reset --hard "origin/$BRANCH_TO_USE";
     cd $CWD;
 }
 GitRepoExists(){
@@ -241,19 +252,15 @@ GitRepoDown(){
     fi;
 }
 GitRepoUp(){
-    if GitRepoExists; then
-        if [[ $IS_PROD_ENV = true ]]; then
-            if GitPull; then return 0; else return 1; fi;
-        fi;
-        return 0;
-    else
-        if GitCloneRepo ; then return 0; else return 1; fi;
+    if GitRepoExists;
+        then GitPull;
+        else GitCloneRepo;
     fi;
 }
 
 WEBSERVER_HOSTNAME="${WEB_DOMAIN_NAME}Host";
 DBWebServerExists(){
-    if [ -z $(docker ps -f name="$WEBSERVER_HOSTNAME" -q) ]; then return 1; else return 0; fi;
+    if [ -z $(docker ps -a -f name="$WEBSERVER_HOSTNAME" -q) ]; then return 1; else return 0; fi;
 }
 Debug(){
     echo "REPO_DIR=$REPO_DIR";
@@ -282,7 +289,7 @@ DBWebServerCreate_(){
     IP_ADDRESS=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $DB_CONTAINER_NAME);
 
     sed "s/%email_address%/$EMAIL_ADDRESS/;s/%WEB_DOMAIN_NAME%/$WEB_DOMAIN_NAME/g;s/%URL_ENDING%/$URL_ENDING/g;s/%GIT_REPO_TITLE%/$GIT_REPO_TITLE/;s/%PATH_TO_PUBLIC%/$PATH_TO_PUBLIC_ESCAPED/;s/%PATH_TO_PUBLIC_ESCAPED%/$PATH_TO_PUBLIC_ESCAPED_TWICE/;s/\$DB_CONTAINER_NAME/$DB_CONTAINER_NAME/;s/\$DB_PORT/$DB_PORT/;s/\$DB_NAME/$DB_NAME/;s/\$DB_USER_NAME/$DB_USER_NAME/;s/\$DB_USER_PASSWORD/$DB_USER_PASSWORD/;s/\$WEB_DOMAIN_NAME/$WEB_DOMAIN_NAME/;" ./Dockerfile | \
-    docker build -t katzda/bookings:latest . -f -;
+    docker build -t "$WEB_DOMAIN_NAME.img" . -f -;
 
     #Create a container
     docker run \
@@ -293,10 +300,10 @@ DBWebServerCreate_(){
         --rm \
         --add-host=$DB_CONTAINER_NAME:$IP_ADDRESS \
         --network=$NETWORK_TITLE \
-        katzda/bookings:latest;
+        "$WEB_DOMAIN_NAME.img";
 }
 DBWebServerDelete_(){
-    docker rm -f $(docker ps -f name="$WEBSERVER_HOSTNAME" -q)
+    docker rm -f $(docker ps -a -f name="$WEBSERVER_HOSTNAME" -q)
 }
 DBWebServerUp(){
     if DBWebServerExists; then
@@ -350,12 +357,6 @@ else
     NetworkUp;
     VolumeUp;
     DBHostUp;
-    if ! GitRepoUp; then
-        echo "Did you register this PUBLIC KEY in your repo?"
-        cat ~/.ssh/$SSH_KEY_TITLE.pub
-        echo "Something's wrong with SSH communication, exiting."
-        exit;
-    else
-        DBWebServerUp;
-    fi;
+    GitRepoUp
+    DBWebServerUp;
 fi;

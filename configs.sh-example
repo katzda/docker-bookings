@@ -8,6 +8,8 @@
 #               the url to add to your host file.
 
 IS_PROD_ENV=false
+BRANCH_DEV=develop
+BRANCH_PROD=master
 
 SAMBA_SHARE_DIRECTORY=sambashare
 
@@ -18,7 +20,7 @@ URL_ENDING=.com
 DB_NAME=mydb
 DB_USER_NAME=postgres
 DB_PORT=5432
-DB_USER_PASSWORD=password
+DB_USER_PASSWORD=
 
 #Example: git@github.com:your_github_username/git_repo_title.git
 GIT_CLONE_SSH_URL=
