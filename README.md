@@ -16,10 +16,8 @@ Allows deploymment of the corresponding private repo
 2. cd into your home dir "cd ~/"
 3. git clone this repo
 4. cd inside the cloned repo
-5. execute "cp configs.sh-example configs.sh" to create your own (already .gitignored) configuration file
-6. 'nano configs.sh' and customize any values (e.g. an email, password)
-7. run script "./server-install.sh" (and follow inscructions). You can also inspect arguments with '-h' flag
-8. Run the "./install.sh" script and enjoy the magic. (also supports '-h' flag)
+5. run script "./server-install.sh" (and follow inscructions). You can also inspect arguments with '-h' flag
+6. Run the "./install.sh" script and enjoy the magic. (also supports '-h' flag)
 
 ---------------------------------------------------------
 - For development on windows it is practical to install on windows "mtputty" and "putty", link "mtputty" to use "putty" so you can ssh and work easily with the linux VM, rather than working with the actual VM directly (hassle).
