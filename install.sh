@@ -224,12 +224,6 @@ GitCloneRepo(){
         return 0;
     fi;
 }
-IsOnTheRightBranch(){
-    if [[ $BRANCH_TO_USE = $(git status | sed -E 's/On branch (.*)/\1/;q') ]];
-        then return 0;
-        else return 1;
-    fi;
-}
 GitPull(){
     CWD=$(pwd)
     cd $INSTALL_DIR/$GIT_REPO_TITLE
