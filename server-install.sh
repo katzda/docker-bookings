@@ -296,11 +296,12 @@ SSHKeysUnset(){
 SSHConfigSet(){
     ssh_configuration_text="Host github.com\n";
     ssh_configuration_text+="  Hostname github.com\n";
+    ssh_configuration_text+="  StrictHostKeyChecking no\n";
     ssh_configuration_text+="  IdentityFile = ~/.ssh/$SSH_KEY_TITLE\n";
     echo -e $ssh_configuration_text >> ~/.ssh/config
 }
 SSHConfigUnset(){
-    sed -z -i "s/Host github.com//;s/ Hostname github.com//;s/ IdentityFile = .*//;/^\s*$/ d" ~/.ssh/config
+    sed -z -i "s/Host github.com//;s/ Hostname github.com//;s/ StrictHostKeyChecking no//;s/ IdentityFile = .*//;/^\s*$/ d" ~/.ssh/config
 }
 #UP and DOWN
 SSHUp(){
