@@ -1,5 +1,5 @@
 # docker-bookings
-Allows deploymment of the corresponding private repo, provided I registered your public key
+Allows deploymment of the corresponding private repo
 
 1. You need ubuntu 18.04 LTS from https://ubuntu.com/download/server<br>
   Settings which work in VirtualBox:<br><i>
