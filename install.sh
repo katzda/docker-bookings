@@ -4,7 +4,11 @@
 #################################################
 ##OPTIONS: Make this script behave dinamically ##
 #################################################
-
+if [[ $IS_PROD_ENV = true ]]; then
+    BRANCH_TO_USE=$BRANCH_PROD;
+else
+    BRANCH_TO_USE=$BRANCH_DEV;
+fi;
 INSTALL_DIR=$HOME/$SAMBA_SHARE_DIRECTORY
 UNINSTALL=false
 PURGE=false
@@ -13,12 +17,12 @@ IMAGES=false
 SKIP_POST_INSTALLATION_STEPS=false
 INSTALL_DEV_CWD=$(pwd)
 FLAG_VOLUME_DELETE=false
-HELP_TEXT="This script will install the DB container, create a database with a user, create an image and a container for the web server, download the git repo - making sure it contains the latest commit, run composer, npm install and dev compilation and php artisan command for DB migration. By default every run of this script (install or uninstall deletes dangling images and stopped containers)\n
+HELP_TEXT="This script will deploy '$WEB_DOMAIN_NAME$URL_ENDING' based on the '$GITHUB_CLONE_SSH_URL' repository, using the corresponding branch based on environment (currently set to be the '$BRANCH_TO_USE' branch).\n
 -h Help text\n
--U UNINSTALL: this will delete the 'configured' PostgresContainer (not the volume!), Apache Server container, Networks (the containers use to communicate) and the git REPO and then exit. This can be used with -R -I -P -V flags.\n
+-U UNINSTALL: this will delete the 'configured' PostgresContainer (not the volume!), Apache Server container, Networks (the containers use to communicate) and then exit. This can be used with -R -I -P -V flags.\n
 -R Repo: Deletes the entire repo directory (so the automatic setup will have to reinstall all dependencies again)\n
 -I Images: Delete all docker images as well (so they will have to be recreated from scratch again)\n
--P Purge: Deletes all running containers (not just the configured ones) and all networks (but not the volumes unless running with -V and not in prod). This is a good flag to use often if you are constantly renaming your webserver in the 'configs' file etc and have some previous containers to remove you forgot to uninstall with -U. But this will affect all docker containers and all webservers on the system.\n
+-P Purge: Deletes all running containers and all networks. This is meant to be used if you are constantly changing values in the 'configs.sh' file before a proper uninstallation (so you end up having multiple containers with different names, etc.) This will affect all containers and networks on the system. This will also delete volumes and images when run with -V and -I flags. But because volumes contain the DB data, this only removes volumes when 'IS_PROD_ENV' config is set to false\n
 -V Volume: This flag must be explicitely used with -U to include removal of DB volume(s). This step basically destroys the DB data in a dev environment. If \$IS_PROD_ENV is set to true (in configs.sh) this will still not delete any volume(s)\n
 -s SKIP_POST_INSTALLATION_STEPS - e.g ./install -s will only update docker image but skip the composer and npm install (useful if you are working on docker file and dont want to wait for these irrelevant install steps)";
 
@@ -59,22 +63,23 @@ fi;
 #Networks
 NETWORK_TITLE="${WEB_DOMAIN_NAME}Network"
 NetworkExists(){
-    if [ -z $(docker network ls -f name="$NETWORK_TITLE" -q) ];
-    then return 1;
-    else return 0;
+    if [[ -n $(docker network ls -q -f name="$NETWORK_TITLE") ]];
+    then return 0;
+    else return 1;
     fi
 }
 NetworkOthersExist(){
-    if [ -z $(docker network ls -q) ];
-    then return 1;
-    else return 0;
+    ALL_NETS=$(docker network ls -q);
+    if [[ ${#ALL_NETS[@]} -gt 3 ]];
+    then return 0;
+    else return 1;
     fi
 }
 NetworkCreate_(){
     docker network create $NETWORK_TITLE
 }
 NetworkDelete_(){
-    docker network rm $(docker network ls -f name="$NETWORK_TITLE" -q)
+    docker network rm $(docker network ls -q -f name="$NETWORK_TITLE")
 }
 NetworkDeleteAll_(){
     docker network prune -f;
@@ -101,15 +106,15 @@ NetworkAllDown(){
 #Volumes
 VOLUME_TITLE="${WEB_DOMAIN_NAME}Volume"
 VolumeExists(){
-    if [ -z $(docker volume ls -f name="$VOLUME_TITLE" -q) ];
-    then return 1;
-    else return 0;
+    if [[ -n $(docker volume ls -f name="$VOLUME_TITLE" -q) ]];
+    then return 0;
+    else return 1;
     fi
 }
 VolumesOtherExist(){
-    if [ -z $(docker volume ls -q) ];
-    then return 1;
-    else return 0;
+    if [[ -n $(docker volume ls -q) ]];
+    then return 0;
+    else return 1;
     fi
 }
 VolumeCreate_(){
@@ -142,11 +147,6 @@ VolumesAllDown(){
 
 #REPOSITORY
 GIT_REPO_TITLE=$(echo $GITHUB_CLONE_SSH_URL | sed -E "s/.*:[a-z]+\/([a-z.\-]+)\.git/\1/");
-if [[ $IS_PROD_ENV = true ]]; then
-    BRANCH_TO_USE=$BRANCH_PROD;
-else
-    BRANCH_TO_USE=$BRANCH_DEV;
-fi;
 REPO_DIR="$INSTALL_DIR/$GIT_REPO_TITLE"
 GitCloneRepo(){
     mkdir $REPO_DIR;
@@ -201,8 +201,14 @@ ImageServerExists(){
     else return 1;
     fi
 }
+ImagesUbuntuExist(){
+    if [[ -n $(docker images ubuntu -q) ]];
+    then return 0;
+    else return 1;
+    fi
+}
 ImagesOthersExist(){
-    if [[ -n $(docker images -a -q) ]];
+    if [[ -n $(docker images -q) ]];
     then return 0;
     else return 1;
     fi
@@ -210,23 +216,61 @@ ImagesOthersExist(){
 ImageDBCreate_(){
     docker pull postgres:latest;
 }
+DB_CONTAINER_NAME="${DB_NAME}Host"
+WEBSERVER_HOSTNAME="${WEB_DOMAIN_NAME}Host";
+Debug(){
+    echo "REPO_DIR=$REPO_DIR";
+    echo "GIT_REPO_TITLE=$GIT_REPO_TITLE";
+    echo "PATH_TO_PUBLIC=$PATH_TO_PUBLIC";
+    echo "PATH_TO_PUBLIC_ESCAPED=$PATH_TO_PUBLIC_ESCAPED";
+    echo "PATH_TO_PUBLIC_ESCAPED_TWICE=$PATH_TO_PUBLIC_ESCAPED_TWICE";
+    echo "DB_CONTAINER_NAME=$DB_CONTAINER_NAME";
+    echo "EMAIL_ADDRESS=$EMAIL_ADDRESS";
+    echo "WEB_DOMAIN_NAME=$WEB_DOMAIN_NAME";
+    echo "URL_ENDING=$URL_ENDING";
+    echo "GIT_REPO_TITLE=$GIT_REPO_TITLE";
+    echo "DB_PORT=$DB_PORT";
+    echo "DB_NAME=$DB_NAME";
+    echo "DB_USER_NAME=$DB_USER_NAME";
+    echo "DB_USER_PASSWORD=$DB_USER_PASSWORD";
+    echo "IP_ADDRESS=$IP_ADDRESS";
+    echo "NETWORK_TITLE=$NETWORK_TITLE";
+    echo "INSTALL_DEV_CWD=$INSTALL_DEV_CWD";
+    exit;
+}
+
+PATH_TO_PUBLIC=$(find $REPO_DIR -name index.php | sed -E "s/(.*?)\/$GIT_REPO_TITLE(\/.*)\/public\/index\.php/\2/;s/\/(.*)$/\1/");
 ImageServerCreate_(){
-    PATH_TO_PUBLIC=$(find $REPO_DIR -name index.php | sed -E "s/(.*?)\/$GIT_REPO_TITLE(\/.*)\/public\/index\.php/\2/;s/\/(.*)$/\1/");
     PATH_TO_PUBLIC_ESCAPED=$(echo $PATH_TO_PUBLIC | sed 's/\//\\\//');
     PATH_TO_PUBLIC_ESCAPED_TWICE=$(echo $PATH_TO_PUBLIC_ESCAPED | sed 's/\//\\\\\//');
-    IP_ADDRESS=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $DB_CONTAINER_NAME);
 
-    sed "s/%email_address%/$EMAIL_ADDRESS/;s/%WEB_DOMAIN_NAME%/$WEB_DOMAIN_NAME/g;s/%URL_ENDING%/$URL_ENDING/g;s/%GIT_REPO_TITLE%/$GIT_REPO_TITLE/;s/%PATH_TO_PUBLIC%/$PATH_TO_PUBLIC_ESCAPED/;s/%PATH_TO_PUBLIC_ESCAPED%/$PATH_TO_PUBLIC_ESCAPED_TWICE/;s/\$DB_CONTAINER_NAME/$DB_CONTAINER_NAME/;s/\$DB_PORT/$DB_PORT/;s/\$DB_NAME/$DB_NAME/;s/\$DB_USER_NAME/$DB_USER_NAME/;s/\$DB_USER_PASSWORD/$DB_USER_PASSWORD/;s/\$WEB_DOMAIN_NAME/$WEB_DOMAIN_NAME/;" INSTALL_DEV_CWD/Dockerfile | \
-    docker build -t $IMAGE_WebServer_NAME INSTALL_DEV_CWD -f -;
+    sed "s/%email_address%/$EMAIL_ADDRESS/;s/%WEB_DOMAIN_NAME%/$WEB_DOMAIN_NAME/g;s/%URL_ENDING%/$URL_ENDING/g;s/%GIT_REPO_TITLE%/$GIT_REPO_TITLE/;s/%PATH_TO_PUBLIC%/$PATH_TO_PUBLIC_ESCAPED/;s/%PATH_TO_PUBLIC_ESCAPED%/$PATH_TO_PUBLIC_ESCAPED_TWICE/;s/\$DB_CONTAINER_NAME/$DB_CONTAINER_NAME/;s/\$DB_PORT/$DB_PORT/;s/\$DB_NAME/$DB_NAME/;s/\$DB_USER_NAME/$DB_USER_NAME/;s/\$DB_USER_PASSWORD/$DB_USER_PASSWORD/;s/\$WEB_DOMAIN_NAME/$WEB_DOMAIN_NAME/;" $INSTALL_DEV_CWD/Dockerfile | \
+    docker build -t $IMAGE_WebServer_NAME $INSTALL_DEV_CWD -f -;
 }
 ImageDBDelete_(){
     docker rmi -f $(docker images postgres -q);
+}
+ImageUbuntuDelete_(){
+    docker rmi -f $(docker images ubuntu -q);
+}
+ImageUbuntuCreate_(){
+    docker pull ubuntu:latest;
+}
+ImageUbuntuDown(){
+    if ImagesUbuntuExist; then
+        ImageUbuntuDelete_;
+    fi;
+}
+ImageUbuntuUp(){
+    if ! ImagesUbuntuExist; then
+        ImageUbuntuCreate_;
+    fi;
 }
 ImageServerDelete_(){
     docker rmi -f $(docker images $IMAGE_WebServer_NAME -q);
 }
 ImageDeleteAll_(){
-    docker rmi -f $(docker images -a -q);
+    docker rmi -f $(docker images -q);
 }
 ImageDBUp(){
     if ! ImageDBExists; then
@@ -253,42 +297,35 @@ ImagesPrune(){
         ImageDeleteAll_;
     fi;
 }
+ImagesAreClean(){
+    if [[ -z $(docker images -q -f "dangling=true") ]];
+    then return 0;
+    else return 1;
+    fi;
+}
+ImagesClean(){
+    if ! ImagesAreClean; then
+        docker rmi -f $(docker images -q -f "dangling=true");
+    fi;
+}
 
 #Containers
-Debug(){
-    echo "REPO_DIR=$REPO_DIR";
-    echo "GIT_REPO_TITLE=$GIT_REPO_TITLE";
-    echo "PATH_TO_PUBLIC=$PATH_TO_PUBLIC";
-    echo "PATH_TO_PUBLIC_ESCAPED=$PATH_TO_PUBLIC_ESCAPED";
-    echo "PATH_TO_PUBLIC_ESCAPED_TWICE=$PATH_TO_PUBLIC_ESCAPED_TWICE";
-    echo "DB_CONTAINER_NAME=$DB_CONTAINER_NAME";
-    echo "EMAIL_ADDRESS=$EMAIL_ADDRESS";
-    echo "WEB_DOMAIN_NAME=$WEB_DOMAIN_NAME";
-    echo "URL_ENDING=$URL_ENDING";
-    echo "GIT_REPO_TITLE=$GIT_REPO_TITLE";
-    echo "DB_PORT=$DB_PORT";
-    echo "DB_NAME=$DB_NAME";
-    echo "DB_USER_NAME=$DB_USER_NAME";
-    echo "DB_USER_PASSWORD=$DB_USER_PASSWORD";
-    echo "IP_ADDRESS=$IP_ADDRESS";
-    echo "NETWORK_TITLE=$NETWORK_TITLE";
-    exit;
-}
-DB_CONTAINER_NAME="${DB_NAME}Host"
-WEBSERVER_HOSTNAME="${WEB_DOMAIN_NAME}Host";
 ContainerDBExists(){
-    if [ -z $(docker ps -a -f name="$DB_CONTAINER_NAME" -q) ];
-    then return 1;
-    else return 0;
+    if [[ -n $(docker ps -a -f name="$DB_CONTAINER_NAME" -q) ]];
+    then return 0;
+    else return 1;
     fi
 }
 ContainerServerExists(){
-    if [ -z $(docker ps -a -f name="$WEBSERVER_HOSTNAME" -q) ]; then return 1; else return 0; fi;
+    if [[ -n $(docker ps -a -f name="$WEBSERVER_HOSTNAME" -q) ]];
+    then return 0;
+    else return 1;
+    fi;
 }
 ContainerOthersExist(){
-    if [ -z $(docker ps -a -q) ];
-    then return 1;
-    else return 0;
+    if [[ -n $(docker ps -a -q) ]];
+    then return 0;
+    else return 1;
     fi
 }
 ContainerDBCreate_(){
@@ -305,6 +342,8 @@ ContainerDBCreate_(){
     postgres:latest
 }
 ContainerServerCreate_(){
+    IP_ADDRESS=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $DB_CONTAINER_NAME);
+
     docker run \
         -v $REPO_DIR/:/var/www/$WEB_DOMAIN_NAME$URL_ENDING \
         --name $WEBSERVER_HOSTNAME \
@@ -315,13 +354,14 @@ ContainerServerCreate_(){
         --network=$NETWORK_TITLE \
         "$WEB_DOMAIN_NAME.img";
 
-    if [[ $SKIP_POST_INSTALLATION_STEPS = false ]]; then
-        docker exec $WEBSERVER_HOSTNAME bash -c "chmod 775 -R storage";
-        docker exec -u developer $WEBSERVER_HOSTNAME bash -c "if [ ! -f .env ]; then mv /home/developer/.env /var/www/$WEB_DOMAIN_NAME$URL_ENDING/$PATH_TO_PUBLIC; fi;";
-        docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'composer install && npm install && npm run dev';
-        docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'if [[ -z $(cat .env | grep APP_KEY | sed -E "s/APP_KEY=(.*)$/\1/;s/\s+//;q") ]]; then php artisan key:generate; fi;';
-        docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'php artisan migrate';
-    fi;
+    #Only this post container creation step can be run only once - after the container is created
+    docker exec $WEBSERVER_HOSTNAME bash -c "chmod 775 -R storage";
+}
+ContainerPostServerCreateSteps(){
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c "if [ ! -f .env ]; then mv /home/developer/.env /var/www/$WEB_DOMAIN_NAME$URL_ENDING/$PATH_TO_PUBLIC; fi;";
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'composer install && npm install && npm run dev';
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'if [[ -z $(cat .env | grep APP_KEY | sed -E "s/APP_KEY=(.*)$/\1/;s/\s+//;q") ]]; then php artisan key:generate; fi;';
+    docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'php artisan migrate';
 }
 ContainerDBDelete_(){
     docker rm -f $(docker ps -a -f name="$DB_CONTAINER_NAME" -q)
@@ -345,13 +385,12 @@ ContainerDBDown(){
     fi;
 }
 ContainerServerUp(){
-    if ! ImageServerExists; then
-        echo "Creating Apache2 image ($IMAGE_WebServer_NAME)"
-        ImageServerCreate_;
-    fi;
     if ! ContainerServerExists; then
         echo "Creating Apache2 container ($WEBSERVER_HOSTNAME)"
         ContainerServerCreate_;
+    fi;
+    if [[ $SKIP_POST_INSTALLATION_STEPS = false ]]; then
+        ContainerPostServerCreateSteps;
     fi;
 }
 ContainerServerDown(){
@@ -370,10 +409,10 @@ ContainersPrune(){
 ############################################################################################################################
 #CHECK METHODS: These serve as high level managers to know what needs to be done based on options and set configurations, ##
 ############### e.g: "-U" or "IS_PROD_ENV=true" ############################################################################
+#Options: UNINSTALL, REPO, IMAGES, PURGE, VOLUME
 ############################################################################################################################
 
 CheckNetworks(){
-    #Options: U, REPO, IMAGES, PURGE, VOLUME
     if [[ $UNINSTALL = false ]]; then
         NetworkUp;
     else
@@ -386,9 +425,8 @@ CheckNetworks(){
 }
 
 CheckVolumes(){
-    #Options: U, REPO, IMAGES, PURGE, VOLUME
     if [[ $UNINSTALL = false ]]; then
-        NetworkUp;
+        VolumeUp;
     else
         if [[ $IS_PROD_ENV = false ]] && [[ $FLAG_VOLUME_DELETE = true ]]; then
             if [[ $PURGE = false ]]; then
@@ -401,7 +439,6 @@ CheckVolumes(){
 }
 
 CheckRepo(){
-    #Options: U, REPO, IMAGES, PURGE, VOLUME
     if [[ $UNINSTALL = false ]]; then
         GitRepoUp;
     else
@@ -412,14 +449,16 @@ CheckRepo(){
 }
 
 CheckImages(){
-    #Options: U, REPO, IMAGES, PURGE, VOLUME
     if [[ $UNINSTALL = false ]]; then
         ImageDBUp;
+        ImageUbuntuUp;
         ImageServerUp;
+        ImagesClean;
     else
         if [[ $IMAGES = true ]]; then
             if [[ $PURGE = false ]]; then
                 ImageServerDown;
+                ImageUbuntuDown;
                 ImageDBDown;
             else
                 ImagesPrune;
@@ -429,7 +468,6 @@ CheckImages(){
 }
 
 CheckContainers(){
-    #Options: U, REPO, IMAGES, PURGE, VOLUME
     if [[ $UNINSTALL = false ]]; then
         ContainerDBUp;
         ContainerServerUp;
@@ -442,7 +480,6 @@ CheckContainers(){
         fi;
     fi;
 }
-
 
 ########################################################################################################
 #DEPENDENCY FUNCTION: The order of check functions matter differently when UNINTALL is true and false ##
