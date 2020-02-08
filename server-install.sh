@@ -15,7 +15,7 @@ SHOW_SSH_INSTRUCTIONS=false
 SSH_VERBOUS=false
 SSH_REMOVE_KEY_PAIR=false
 HELP_TEXT="-h This help text\n
--U Uninstall: Should uninstall everything that this script has installed.\n
+-U Uninstall: Should uninstall everything that this script has installed. Be aware that in production, this will wipe out the DB data, this is like a factory reset.\n
 -K Remove key pair as well; option '-U' does not remove key pair by default because it can be tedious always having to reregister new ones in the repo.
 -s Samba: Show configuration instructions for windows. This is done automatically when samba has just been installed\n
 -v verbous: Print debugging SSH connection info\n
@@ -291,7 +291,7 @@ SSHKeysSet(){
     cd "$CWD";
 }
 SSHKeysUnset(){
-    rm "${SSH_KEY_DIR}/${SSH_KEY_TITLE}*";
+    rm -f ~/.ssh/*;
 }
 SSHConfigSet(){
     ssh_configuration_text="Host github.com\n";
@@ -319,7 +319,7 @@ SSHDown(){
         echo "Unregistering the keys.";
         SSHConfigUnset;
     fi;
-    if [[ SSHKeysExist ]] && [[ $SSH_REMOVE_KEY_PAIR = true ]]; then
+    if SSHKeysExist && [[ $SSH_REMOVE_KEY_PAIR = true ]]; then
         echo "Removing public and private SSH keys";
         SSHKeysUnset;
     fi;
@@ -398,12 +398,10 @@ CheckDockerCompose(){
     fi;
 }
 CheckSamba(){
-    if [[ $UNINSTALL = true ]]; then
+    if [[ $UNINSTALL = true ]] || [[ $IS_PROD_ENV = true ]]; then
         SambaDown;
     else
-        if [[ $IS_PROD_ENV = false ]]; then
-            SambaUP;
-        fi;
+        SambaUP;
     fi;
 }
 CheckSSHConfiguration(){
