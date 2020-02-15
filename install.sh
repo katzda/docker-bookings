@@ -259,7 +259,7 @@ ImageServerCreate_(){
     PATH_TO_PUBLIC_ESCAPED=$(echo $PATH_TO_PUBLIC | sed 's/\//\\\//');
     PATH_TO_PUBLIC_ESCAPED_TWICE=$(echo $PATH_TO_PUBLIC_ESCAPED | sed 's/\//\\\\\//');
 
-    sed "s/%email_address%/$EMAIL_ADDRESS/;s/%WEB_DOMAIN_NAME%/$WEB_DOMAIN_NAME/g;s/%URL_ENDING%/$URL_ENDING/g;s/%GIT_REPO_TITLE%/$GIT_REPO_TITLE/;s/%PATH_TO_PUBLIC%/$PATH_TO_PUBLIC_ESCAPED/;s/%PATH_TO_PUBLIC_ESCAPED%/$PATH_TO_PUBLIC_ESCAPED_TWICE/;s/\$DB_CONTAINER_NAME/$DB_CONTAINER_NAME/;s/\$DB_PORT/$DB_PORT/;s/\$DB_NAME/$DB_NAME/;s/\$DB_USER_NAME/$DB_USER_NAME/;s/\$DB_USER_PASSWORD/$DB_USER_PASSWORD/;s/\$WEB_DOMAIN_NAME/$WEB_DOMAIN_NAME/;" $INSTALL_DEV_CWD/Dockerfile | \
+    sed "s/%email_address%/$EMAIL_ADDRESS/;s/%WEB_DOMAIN_NAME%/$WEB_DOMAIN_NAME/g;s/%URL_ENDING%/$URL_ENDING/g;s/%GIT_REPO_TITLE%/$GIT_REPO_TITLE/;s/%PATH_TO_PUBLIC%/$PATH_TO_PUBLIC_ESCAPED/;s/%PATH_TO_PUBLIC_ESCAPED%/$PATH_TO_PUBLIC_ESCAPED_TWICE/;s/%DB_CONTAINER_NAME%/$DB_CONTAINER_NAME/;s/%DB_PORT%/$DB_PORT/;s/%DB_NAME%/$DB_NAME/;s/%DB_USER_NAME%/$DB_USER_NAME/;s/%DB_USER_PASSWORD%/$DB_USER_PASSWORD/" $INSTALL_DEV_CWD/Dockerfile | \
     docker build -t $IMAGE_WebServer_NAME $INSTALL_DEV_CWD -f -;
 }
 ImageDBDelete_(){
@@ -288,14 +288,10 @@ ImageDeleteAll_(){
     docker rmi -f $(docker images -q);
 }
 ImageDBUp(){
-    if ! ImageDBExists; then
-        ImageDBCreate_;
-    fi;
+    ImageDBCreate_;
 }
 ImageServerUp(){
-    if ! ImageServerExists; then
-        ImageServerCreate_;
-    fi;
+    ImageServerCreate_;
 }
 ImageDBDown(){
     if ImageDBExists; then
@@ -372,13 +368,13 @@ ContainerServerCreate_(){
     #Only this post container creation step can be run only once - after the container is created
     docker exec $WEBSERVER_HOSTNAME bash -c "chmod 775 -R storage";
 }
-ContainerPostServerCreateSteps(){
+ContainerPostServerCreateSteps() {
     docker exec -u developer $WEBSERVER_HOSTNAME bash -c "if [ ! -f .env ]; then mv /home/developer/.env /var/www/$WEB_DOMAIN_NAME$URL_ENDING/$PATH_TO_PUBLIC; fi;";
     docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'composer install && npm install && npm run dev';
     docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'if [[ -z $(cat .env | grep APP_KEY | sed -E "s/APP_KEY=(.*)$/\1/;s/\s+//;q") ]]; then php artisan key:generate; fi;';
     docker exec -u developer $WEBSERVER_HOSTNAME bash -c 'php artisan migrate';
 }
-ContainerDBDelete_(){
+ContainerDBDelete_() {
     docker rm -f $(docker ps -a -f name="$DB_CONTAINER_NAME" -q)
 }
 ContainerServerDelete_(){
@@ -505,6 +501,9 @@ Setup(){
         CheckNetworks;
         CheckVolumes;
         CheckRepo;
+        # Rebuilding an image requires that no containers use them
+        ContainerDBDown;
+        ContainerServerDown;
         CheckImages;
         CheckContainers;
     else

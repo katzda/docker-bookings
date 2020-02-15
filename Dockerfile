@@ -50,8 +50,8 @@ USER developer
 
 COPY .env /home/developer/.env
 
-RUN sed -i "s/&WEB_DOMAIN_NAME&/$WEB_DOMAIN_NAME/;s/&DB_CONTAINER_NAME&/$DB_CONTAINER_NAME/;s/&DB_PORT&/$DB_PORT/;s/&DB_NAME&/$DB_NAME/; \
-            s/&DB_USER_NAME&/$DB_USER_NAME/;s/&DB_USER_PASSWORD&/$DB_USER_PASSWORD/;" /home/developer/.env
+RUN sed -i "s/&WEB_DOMAIN_NAME&/%WEB_DOMAIN_NAME%/;s/&DB_CONTAINER_NAME&/%DB_CONTAINER_NAME%/;s/&DB_PORT&/%DB_PORT%/;s/&DB_NAME&/%DB_NAME%/; \
+            s/&DB_USER_NAME&/%DB_USER_NAME%/;s/&DB_USER_PASSWORD&/%DB_USER_PASSWORD%/;" /home/developer/.env
 
 USER root
 
