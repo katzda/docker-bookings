@@ -40,6 +40,20 @@ do
     esac
 done
 
+ShowRequiredSettingsContent(){
+    echo -e "IS_PROD_ENV \t\t= '$IS_PROD_ENV' \t\t\t\t\t(strlen: ${#IS_PROD_ENV})";
+    echo -e "BRANCH_DEV \t\t= '$BRANCH_DEV' \t\t\t\t\t(strlen: ${#BRANCH_DEV})";
+    echo -e "BRANCH_PROD \t\t= '$BRANCH_PROD' \t\t\t\t\t(strlen: ${#BRANCH_PROD})";
+    echo -e "EMAIL_ADDRESS \t\t= '$EMAIL_ADDRESS' \t\t\t(strlen: ${#EMAIL_ADDRESS})";
+    echo -e "WEB_DOMAIN_NAME \t= '$WEB_DOMAIN_NAME' \t\t\t\t\t(strlen: ${#WEB_DOMAIN_NAME})";
+    echo -e "URL_ENDING \t\t= '$URL_ENDING' \t\t\t\t\t(strlen: ${#URL_ENDING})";
+    echo -e "DB_NAME \t\t= '$DB_NAME' \t\t\t\t\t(strlen: ${#DB_NAME})";
+    echo -e "DB_USER_NAME \t\t= '$DB_USER_NAME' \t\t\t\t\t(strlen: ${#DB_USER_NAME})";
+    echo -e "DB_PORT \t\t= '$DB_PORT' \t\t\t\t\t(strlen: ${#DB_PORT})";
+    echo -e "DB_USER_PASSWORD \t= '$DB_USER_PASSWORD' \t\t\t\t\t\t(strlen: ${#DB_USER_PASSWORD})";
+    echo -e "GITHUB_CLONE_SSH_URL \t= '$GITHUB_CLONE_SSH_URL' \t(strlen: ${#GITHUB_CLONE_SSH_URL})";
+}
+
 if  [[ ${#IS_PROD_ENV} -eq 0 ]] || \
     [[ ${#BRANCH_DEV} -eq 0 ]] || \
     [[ ${#BRANCH_PROD} -eq 0 ]] || \
@@ -52,7 +66,8 @@ if  [[ ${#IS_PROD_ENV} -eq 0 ]] || \
     [[ ${#DB_USER_PASSWORD} -eq 0 ]] || \
     [[ ${#GITHUB_CLONE_SSH_URL} -eq 0 ]];
 then
-    echo "Please supply information for all parameters in 'config.sh':"
+    echo -e "Please supply information for all parameters in 'config.sh':\n"
+    ShowRequiredSettingsContent;
     exit
 fi;
 
