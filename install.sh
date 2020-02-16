@@ -66,7 +66,7 @@ if  [[ ${#IS_PROD_ENV} -eq 0 ]] || \
     [[ ${#DB_USER_PASSWORD} -eq 0 ]] || \
     [[ ${#GITHUB_CLONE_SSH_URL} -eq 0 ]];
 then
-    echo -e "Please supply information for all parameters in 'config.sh':\n"
+    echo -e "Please supply information for all parameters in 'configs.sh':\n"
     ShowRequiredSettingsContent;
     exit
 fi;

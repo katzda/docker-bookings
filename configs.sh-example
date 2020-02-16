@@ -22,5 +22,5 @@ DB_USER_NAME=postgres
 DB_PORT=5432
 DB_USER_PASSWORD=
 
-#Example: git@github.com:your_github_username/git_repo_title.git
+#Example: git@github.com:github_username/git_repo_title.git
 GIT_CLONE_SSH_URL=
