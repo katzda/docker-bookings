@@ -10,16 +10,16 @@ fi;
 . ./configs.sh
 export INSTALL_DIR=$INSTALL_DIR;
 UNINSTALL=false
-SSH_REMOVE_KEY_PAIR=false
 SHOW_SAMBA_INSTRUCTIONS=false
 SHOW_SSH_INSTRUCTIONS=false
 SSH_VERBOUS=false
+SSH_REMOVE_KEY_PAIR=false
 HELP_TEXT="
 \n-h | --help: \t\t\tShow this help text
 \n-u | --uninstall: \t\tUninstall everything that this script has installed.
 \n-k | --remove-ssh-key-also: \tThis will only apply in case when the database with the name that is set in configs does not exist
 \n-s | --samba-instructions: \tShow configuration instructions for windows. This is done automatically when samba has just been installed
-\n-p | --ssh-key-instructions\tDisplay public key instructions. This is also done automatically if they needed to be generated
+\n-p | --show-ssh-instructions\tDisplay public key instructions. This is also done automatically if they needed to be generated
 \n-v | --ssh-verbous: \t\tPrint debugging SSH connection info
 \n";
 
@@ -35,7 +35,7 @@ while [ "$1" != "" ]; do
         -u | --uninstall ) UNINSTALL=true;;
         -k | --remove-ssh-key-also ) SSH_REMOVE_KEY_PAIR=true;;
         -s | --samba-instructions ) SHOW_SAMBA_INSTRUCTIONS=true;;
-        -p | --ssh-key-instructions ) SHOW_SSH_INSTRUCTIONS=true;;
+        -p | --show-ssh-instructions ) SHOW_SSH_INSTRUCTIONS=true;;
         -v | --ssh-verbous ) SSH_VERBOUS=true;;
         * ) echo -e $HELP_TEXT; exit 1;;
     esac

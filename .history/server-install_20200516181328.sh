@@ -10,37 +10,77 @@ fi;
 . ./configs.sh
 export INSTALL_DIR=$INSTALL_DIR;
 UNINSTALL=false
-SSH_REMOVE_KEY_PAIR=false
 SHOW_SAMBA_INSTRUCTIONS=false
 SHOW_SSH_INSTRUCTIONS=false
 SSH_VERBOUS=false
+SSH_REMOVE_KEY_PAIR=false
+HELP_TEXT="-h This help text\n
+-U Uninstall: Should uninstall everything that this script has installed. Be aware that in production, this will wipe out the DB data, this is like a factory reset.\n
+-K Remove key pair as well; option '-U' does not remove key pair by default because it can be tedious always having to reregister new ones in the repo.
+-s Samba: Show configuration instructions for windows. This is done automatically when samba has just been installed\n
+-v verbous: Print debugging SSH connection info\n
+-p public key: will display public key instructions. This is also done automatically if they needed to be generated."
+
 HELP_TEXT="
 \n-h | --help: \t\t\tShow this help text
-\n-u | --uninstall: \t\tUninstall everything that this script has installed.
-\n-k | --remove-ssh-key-also: \tThis will only apply in case when the database with the name that is set in configs does not exist
-\n-s | --samba-instructions: \tShow configuration instructions for windows. This is done automatically when samba has just been installed
-\n-p | --ssh-key-instructions\tDisplay public key instructions. This is also done automatically if they needed to be generated
-\n-v | --ssh-verbous: \t\tPrint debugging SSH connection info
+\n-v | --volumes-delete-too: \tThis will only apply in case when the database with the name that is set in configs does not exist
+\n-i | --images-delete-too: \tDelete all docker images as well (so they will have to be recreated from scratch again)
+\n-u | --uninstall-only: \t\tThis will literally just prevent 'docker-compose up' being called.
+\n-s | --skip-post-install-steps: Will skip composer install and npm install (useful if you are working on docker file and dont want to wait for these irrelevant install steps)
+\n-p | --path-to-install-dir: \t= \"$INSTALL_DIR\", or provide a custom value, or modify in the \"./configs/base\" file
+\n-g | --git-repo-title: \t\t= \"$GIT_REPO_TITLE\", or provide a custom value, or modify in the \"./configs/base\" file
 \n";
+
+TEXT_HIGHLIGHT="##############################################################################";
+while getopts U-:s-:v-:h-:p-:K-: option
+do
+    case "${option}"
+    in
+        U) UNINSTALL=true;;
+        K) SSH_REMOVE_KEY_PAIR=true;;
+        s) SHOW_SAMBA_INSTRUCTIONS=true;;
+        p) SHOW_SSH_INSTRUCTIONS=true;;
+        v) SSH_VERBOUS=true;;
+        h) echo -e $HELP_TEXT; exit;;
+    esac
+done
+
+
+
+
+. configs/custom
+
+###################
+##DEFAULT VALUES:##
+###################
+
+VOLUMES=false;
+UNINSTALL=false;
+SKIP_COMPOSER_NPM_INSTALL=false;
+IMAGES=false;
+export INSTALL_DIR=$INSTALL_DIR;
+
 
 ############
 ##OPTIONS:##
 ############
 
-TEXT_HIGHLIGHT="##############################################################################";
-
 while [ "$1" != "" ]; do
     case $1 in
         -h | --help ) echo -e $HELP_TEXT; exit;;
-        -u | --uninstall ) UNINSTALL=true;;
-        -k | --remove-ssh-key-also ) SSH_REMOVE_KEY_PAIR=true;;
-        -s | --samba-instructions ) SHOW_SAMBA_INSTRUCTIONS=true;;
-        -p | --ssh-key-instructions ) SHOW_SSH_INSTRUCTIONS=true;;
-        -v | --ssh-verbous ) SSH_VERBOUS=true;;
+        -v | --volumes-delete-too ) VOLUMES=true;;
+        -s | --skip-post-install-steps ) SKIP_COMPOSER_NPM_INSTALL=true;;
+        -i | --images-delete-too ) IMAGES=true;;
+        -u | --uninstall-only ) UNINSTALL=true;;
+        -p | --path-to-install-dir ) shift; INSTALL_DIR=$1;;
+        -g | --git-repo-title ) shift; GIT_REPO_TITLE=$1;;
         * ) echo -e $HELP_TEXT; exit 1;;
     esac
     shift
 done
+
+
+
 
 ####################################################################################
 ##FUNCTIONS: Are usually of these kind: Install, IsInstalled, Uninstall, Up, Down ##

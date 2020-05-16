@@ -10,10 +10,10 @@ fi;
 . ./configs.sh
 export INSTALL_DIR=$INSTALL_DIR;
 UNINSTALL=false
-SSH_REMOVE_KEY_PAIR=false
 SHOW_SAMBA_INSTRUCTIONS=false
 SHOW_SSH_INSTRUCTIONS=false
 SSH_VERBOUS=false
+SSH_REMOVE_KEY_PAIR=false
 HELP_TEXT="
 \n-h | --help: \t\t\tShow this help text
 \n-u | --uninstall: \t\tUninstall everything that this script has installed.

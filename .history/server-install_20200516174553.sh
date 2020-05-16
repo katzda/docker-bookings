@@ -8,38 +8,31 @@ fi;
 ##OPTIONS: Make this script behave dinamically ##
 #################################################
 . ./configs.sh
-export INSTALL_DIR=$INSTALL_DIR;
+INSTALL_DIR=$HOME/$SAMBA_SHARE_DIRECTORY
 UNINSTALL=false
-SSH_REMOVE_KEY_PAIR=false
 SHOW_SAMBA_INSTRUCTIONS=false
 SHOW_SSH_INSTRUCTIONS=false
 SSH_VERBOUS=false
-HELP_TEXT="
-\n-h | --help: \t\t\tShow this help text
-\n-u | --uninstall: \t\tUninstall everything that this script has installed.
-\n-k | --remove-ssh-key-also: \tThis will only apply in case when the database with the name that is set in configs does not exist
-\n-s | --samba-instructions: \tShow configuration instructions for windows. This is done automatically when samba has just been installed
-\n-p | --ssh-key-instructions\tDisplay public key instructions. This is also done automatically if they needed to be generated
-\n-v | --ssh-verbous: \t\tPrint debugging SSH connection info
-\n";
-
-############
-##OPTIONS:##
-############
+SSH_REMOVE_KEY_PAIR=false
+HELP_TEXT="-h This help text\n
+-U Uninstall: Should uninstall everything that this script has installed. Be aware that in production, this will wipe out the DB data, this is like a factory reset.\n
+-K Remove key pair as well; option '-U' does not remove key pair by default because it can be tedious always having to reregister new ones in the repo.
+-s Samba: Show configuration instructions for windows. This is done automatically when samba has just been installed\n
+-v verbous: Print debugging SSH connection info\n
+-p public key: will display public key instructions. This is also done automatically if they needed to be generated."
 
 TEXT_HIGHLIGHT="##############################################################################";
-
-while [ "$1" != "" ]; do
-    case $1 in
-        -h | --help ) echo -e $HELP_TEXT; exit;;
-        -u | --uninstall ) UNINSTALL=true;;
-        -k | --remove-ssh-key-also ) SSH_REMOVE_KEY_PAIR=true;;
-        -s | --samba-instructions ) SHOW_SAMBA_INSTRUCTIONS=true;;
-        -p | --ssh-key-instructions ) SHOW_SSH_INSTRUCTIONS=true;;
-        -v | --ssh-verbous ) SSH_VERBOUS=true;;
-        * ) echo -e $HELP_TEXT; exit 1;;
+while getopts U-:s-:v-:h-:p-:K-: option
+do
+    case "${option}"
+    in
+        U) UNINSTALL=true;;
+        K) SSH_REMOVE_KEY_PAIR=true;;
+        s) SHOW_SAMBA_INSTRUCTIONS=true;;
+        p) SHOW_SSH_INSTRUCTIONS=true;;
+        v) SSH_VERBOUS=true;;
+        h) echo -e $HELP_TEXT; exit;;
     esac
-    shift
 done
 
 ####################################################################################
