@@ -226,6 +226,8 @@ SambaInstall(){
     comment = Samba on Ubuntu
     path = $INSTALL_DIR
     read only = no
+    follow symlinks = yes
+    wide links = yes
     browsable = yes" >> /etc/samba/smb.conf
     sudo chmod 644 /etc/samba/smb.conf
 
