@@ -1,7 +1,8 @@
 #!/bin/bash
 
 if [[ ! -e configs.sh ]]; then
-    cp ./configs.sh-example ./configs.sh
+    echo "Before running server-install.sh you need to create configs.sh based on the example.";
+    exit;
 fi;
 
 #################################################
@@ -9,6 +10,7 @@ fi;
 #################################################
 . ./configs.sh
 export INSTALL_DIR=$INSTALL_DIR;
+export SSH_KEY_TITLE=$SSH_KEY_TITLE;
 UNINSTALL=false
 SSH_REMOVE_KEY_PAIR=false
 SHOW_SAMBA_INSTRUCTIONS=false
@@ -263,7 +265,6 @@ SambaDown(){
 }
 
 #SSH KEY
-SSH_KEY_TITLE=$WEB_DOMAIN_NAME
 #boolean returning functions
 SSHEnsureDirectoryExists(){
     if [[ ! -d ~/.ssh ]]; then
@@ -293,11 +294,11 @@ SSHKeysSet(){
     SSHEnsureDirectoryExists;
     cd ~/.ssh
     ssh-keygen -t rsa -b 4096 -C "${USER}_vm" -P "" -f $SSH_KEY_TITLE
-    chmod 400 ~/.ssh/$SSH_KEY_TITLE.pub
-    chmod 400 ~/.ssh/$SSH_KEY_TITLE
     eval $(ssh-agent -s)
     ssh-add ~/.ssh/$SSH_KEY_TITLE
     cd "$CWD";
+    chmod 400 ~/.ssh/$SSH_KEY_TITLE.pub
+    chmod 400 ~/.ssh/$SSH_KEY_TITLE
 }
 SSHKeysUnset(){
     rm -f ~/.ssh/*;
@@ -366,9 +367,6 @@ PrintPublicKeyInfo(){
 
 PrintFinalMessage(){
     echo -e "This script did its job. All done!"
-    if [[ -z $DB_USER_PASSWORD ]]; then
-        echo "Now don't forget to set a password in configs.sh and run ./install.sh";
-    fi
 }
 
 ############################################################################################################################

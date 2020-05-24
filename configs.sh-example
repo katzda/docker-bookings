@@ -1,0 +1,4 @@
+#!/bin/bash
+
+SAMBA_SHARE_DIRECTORY=/home/$USER/documents
+SSH_KEY_TITLE="${USER}_key"
