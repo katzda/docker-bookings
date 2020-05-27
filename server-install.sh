@@ -227,13 +227,13 @@ SambaInstall(){
     SHOW_SAMBA_INSTRUCTIONS=true
     sudo apt-get update >/dev/null
     sudo apt install samba -y
-    mkdir $INSTALL_DIR
+    mkdir $INSTALL_DIR/$SAMBA_SHARE_DIRECTORY
 
-    echo -e "New [$SAMBA_SHARE_DIRECTORY] will point to $INSTALL_DIR"
+    echo -e "New [$SAMBA_SHARE_DIRECTORY] will point to $INSTALL_DIR/$SAMBA_SHARE_DIRECTORY"
     sudo chmod 777 /etc/samba/smb.conf
     sudo echo -e "[$SAMBA_SHARE_DIRECTORY]
     comment = Samba on Ubuntu
-    path = $INSTALL_DIR
+    path = $INSTALL_DIR/$SAMBA_SHARE_DIRECTORY
     read only = no
     follow symlinks = yes
     wide links = yes
