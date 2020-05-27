@@ -1,4 +1,4 @@
-server-install script will install a few programs for convenient development in windows using Ubuntu VM. 
+Run server-install script in Ubuntu VM. 
 
 What it does:
 
