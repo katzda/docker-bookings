@@ -5,11 +5,28 @@ if [[ ! -e configs.sh ]]; then
     exit;
 fi;
 
+. ./configs.sh
+
+if [[ -z "$SAMBA_SHARE_DIRECTORY" ]]; then
+    echo "Check the configs.sh-example, SAMBA_SHARE_DIRECTORY is not set";
+    exit;
+fi;
+
+if [[ -z "$PATH_TO_SAMBA_SHARE_DIRECTORY" ]]; then
+    echo "Check the configs.sh-example, PATH_TO_SAMBA_SHARE_DIRECTORY is not set";
+    exit;
+fi;
+
+if [[ -z "$SSH_KEY_TITLE" ]]; then
+    echo "Check the configs.sh-example, SSH_KEY_TITLE is not set";
+    exit;
+fi;
+
 #################################################
 ##OPTIONS: Make this script behave dinamically ##
 #################################################
-. ./configs.sh
-export INSTALL_DIR=$INSTALL_DIR;
+export INSTALL_DIR=$PATH_TO_SAMBA_SHARE_DIRECTORY;
+export SAMBA_SHARE_DIRECTORY=$SAMBA_SHARE_DIRECTORY;
 export SSH_KEY_TITLE=$SSH_KEY_TITLE;
 UNINSTALL=false
 SSH_REMOVE_KEY_PAIR=false
