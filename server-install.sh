@@ -22,9 +22,10 @@ if [[ -z "$SSH_KEY_TITLE" ]]; then
     exit;
 fi;
 
-#################################################
-##OPTIONS: Make this script behave dinamically ##
-#################################################
+##############
+##VARIABLES:##
+##############
+
 export INSTALL_DIR=$PATH_TO_SAMBA_SHARE_DIRECTORY;
 export SAMBA_SHARE_DIRECTORY=$SAMBA_SHARE_DIRECTORY;
 export SSH_KEY_TITLE=$SSH_KEY_TITLE;
